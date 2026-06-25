@@ -843,7 +843,7 @@
         "After successful re-verify status returns approved",
         "Non-admin cannot run /reverify"
       ],
-      "passes": false
+      "passes": true
     }
   ]
 }

@@ -22,6 +22,7 @@ from singulr.services.channel_policy import EffectivePolicy, get_effective_chann
 from singulr.services.hashing import hash_fingerprint, hash_ip
 from singulr.services.keystroke import build_keystroke_profile
 from singulr.services.matching import Decision, MatchResult, check_known_bad
+from singulr.services.reverification import STATUS_APPROVED, get_profile, is_reverification_required
 from singulr.services.rate_limit import allow_verify_request
 from singulr.services.tokens import mark_token_used, validate_token
 
@@ -302,15 +303,25 @@ async def submit(
         await _notify_bot(payload)
         return payload
 
-    profile = Profile(
-        telegram_user_id=token_row.telegram_user_id,
-        fingerprint_hash=fingerprint_hash,
-        keystroke_profile=keystroke_profile,
-        device_type=body.device_type,
-        ip_hash=ip_hash,
-        status="approved",
-    )
-    session.add(profile)
+    existing_profile = await get_profile(session, token_row.telegram_user_id)
+    if existing_profile:
+        existing_profile.fingerprint_hash = fingerprint_hash
+        existing_profile.keystroke_profile = keystroke_profile
+        existing_profile.device_type = body.device_type
+        existing_profile.ip_hash = ip_hash
+        if is_reverification_required(existing_profile):
+            existing_profile.status = STATUS_APPROVED
+    else:
+        session.add(
+            Profile(
+                telegram_user_id=token_row.telegram_user_id,
+                fingerprint_hash=fingerprint_hash,
+                keystroke_profile=keystroke_profile,
+                device_type=body.device_type,
+                ip_hash=ip_hash,
+                status=STATUS_APPROVED,
+            )
+        )
     await session.commit()
 
     _log_verification_decision(

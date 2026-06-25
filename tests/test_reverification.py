@@ -148,7 +148,12 @@ async def test_on_join_request_sends_verify_link_without_granting_access(
 
     user = User(id=7200, is_bot=False, first_name="Member")
     chat = Chat(id=-100123, type=Chat.CHANNEL)
-    request = ChatJoinRequest(chat=chat, from_user=user, date=MagicMock())
+    request = ChatJoinRequest(
+        chat=chat,
+        from_user=user,
+        date=MagicMock(),
+        user_chat_id=7200,
+    )
     update = MagicMock()
     update.chat_join_request = request
     context = MagicMock()
@@ -247,7 +252,12 @@ async def test_on_join_request_dm_on_token_rate_limit(
 
     user = User(id=7500, is_bot=False, first_name="Member")
     chat = Chat(id=-100123, type=Chat.CHANNEL)
-    request = ChatJoinRequest(chat=chat, from_user=user, date=MagicMock())
+    request = ChatJoinRequest(
+        chat=chat,
+        from_user=user,
+        date=MagicMock(),
+        user_chat_id=7500,
+    )
     update = MagicMock()
     update.chat_join_request = request
     update.effective_user = user

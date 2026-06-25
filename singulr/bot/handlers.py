@@ -53,6 +53,39 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     await update.message.reply_text(f"Tap to verify:\n{url}")
 
 
+def _is_bot_admin(user_id: int) -> bool:
+    """True when the Telegram user is the configured Singulr admin."""
+    admin_id = get_settings().admin_telegram_id
+    return bool(admin_id) and user_id == admin_id
+
+
+async def reverify_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Admin command to flag a member for mandatory reverification."""
+    if not update.effective_user or not update.message:
+        return
+    if not _is_bot_admin(update.effective_user.id):
+        await update.message.reply_text("Only the configured admin may use /reverify.")
+        return
+    if not context.args:
+        await update.message.reply_text("Usage: /reverify <telegram_user_id>")
+        return
+    try:
+        target_user_id = int(context.args[0])
+    except ValueError:
+        await update.message.reply_text("Usage: /reverify <telegram_user_id>")
+        return
+
+    async with SessionLocal() as session:
+        profile = await require_reverification(session, target_user_id)
+    if not profile:
+        await update.message.reply_text(f"No profile found for user {target_user_id}.")
+        return
+    await update.message.reply_text(
+        f"User {target_user_id} flagged for reverification. "
+        "They will receive a new verify link on their next join request."
+    )
+
+
 async def on_join_request(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Restrict joiner and send verification DM."""
     request = update.chat_join_request
@@ -67,8 +100,21 @@ async def on_join_request(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     except Exception as exc:  # noqa: BLE001
         logger.warning("Could not restrict member: %s", exc)
 
-    async with SessionLocal() as session:
-        token = await create_token(session, user.id, channel_id)
+    try:
+        async with SessionLocal() as session:
+            token = await create_token(session, user.id, channel_id)
+    except TokenRateLimitError:
+        try:
+            await context.application.bot.send_message(
+                chat_id=user.id,
+                text=(
+                    "You have requested too many verification links today. "
+                    "Please try again later or contact the channel admin."
+                ),
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Could not DM rate-limited user %s: %s", user.id, exc)
+        return
 
     title = await get_channel_title(context.application, channel_id)
     url = f"{settings.public_base_url.rstrip('/')}/verify?token={token}"
@@ -184,6 +230,7 @@ def build_bot_application() -> Application:
     app = Application.builder().token(settings.bot_token).build()
     app.add_handler(CommandHandler("start", start_command))
     app.add_handler(CommandHandler("verify", start_command))
+    app.add_handler(CommandHandler("reverify", reverify_command))
     app.add_handler(ChatJoinRequestHandler(on_join_request))
     app.add_handler(CallbackQueryHandler(on_callback))
     app.add_handler(
