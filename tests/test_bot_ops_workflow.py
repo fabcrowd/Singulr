@@ -89,6 +89,10 @@ async def test_auto_deny_block_posts_audit_without_permit(monkeypatch: pytest.Mo
     monkeypatch.setattr("singulr.bot.handlers.ban_member", ban_member)
     monkeypatch.setattr("singulr.bot.handlers.notify_user_result", notify)
     monkeypatch.setattr("singulr.bot.handlers.notify_user_denied", notify_denied)
+    monkeypatch.setattr(
+        "singulr.bot.handlers._ban_history_for_fingerprint",
+        AsyncMock(return_value=None),
+    )
 
     await apply_verification_decision(
         app,
@@ -103,7 +107,9 @@ async def test_auto_deny_block_posts_audit_without_permit(monkeypatch: pytest.Mo
     notify.assert_awaited_once()
     assert notify.await_args.kwargs.get("approved") is False
     app.bot.send_message.assert_awaited_once()
-    assert app.bot.send_message.await_args.kwargs.get("reply_markup") is None
+    markup = app.bot.send_message.await_args.kwargs.get("reply_markup")
+    assert markup is not None
+    assert "More details" in str(markup)
     assert "BAN EVASION" in app.bot.send_message.await_args.kwargs["text"]
 
 

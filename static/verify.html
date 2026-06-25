@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Singulr Verification</title>
+  <title>Verification</title>
   <link rel="stylesheet" href="/static/verify.css" />
   <script src="https://openfpcdn.io/fingerprintjs/v4/iife.min.js" defer></script>
 </head>
@@ -11,17 +11,21 @@
   <main class="card" id="app">
     <div id="loading" class="state">
       <div class="spinner"></div>
-      <p>Checking verification link…</p>
+      <p>Checking your link…</p>
     </div>
 
     <div id="blocked" class="state hidden">
-      <h1>Unable to verify</h1>
-      <p>This verification link is no longer available. Contact the channel admin if you believe this is an error.</p>
+      <h1>Account restricted</h1>
+    </div>
+
+    <div id="pending" class="state hidden">
+      <h1>Verification under review</h1>
+      <p>Once completed, you will receive a notification in Telegram DMs.</p>
     </div>
 
     <div id="form" class="state hidden">
-      <h1>🔒 Singulr Verification</h1>
-      <p class="subtitle">Type the sentence below exactly to join.</p>
+      <h1>Complete verification</h1>
+      <p class="subtitle">Type the sentence below to continue.</p>
 
       <blockquote id="sentence" class="sentence"></blockquote>
 
@@ -38,20 +42,20 @@
 
       <label class="checkbox">
         <input type="checkbox" id="privacy" />
-        <span>I agree to the <a href="#" id="privacy-link">privacy policy</a> (device signals for fraud prevention).</span>
+        <span>I agree to the <a href="#" id="privacy-link">privacy policy</a>.</span>
       </label>
 
-      <button id="submit" type="button" disabled>Join Singulr</button>
+      <button id="submit" type="button" disabled>Continue</button>
     </div>
 
     <div id="success" class="state hidden">
-      <h1>You're verified ✓</h1>
-      <p>Opening Telegram…</p>
+      <h1>You're all set</h1>
+      <p>Check Telegram for next steps.</p>
     </div>
 
     <div id="error" class="state hidden">
-      <h1>Unable to verify</h1>
-      <p id="error-text">Something went wrong. Try requesting a new link from the bot.</p>
+      <h1>Account restricted</h1>
+      <p id="error-text">This link is no longer valid.</p>
     </div>
   </main>
 

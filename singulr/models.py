@@ -129,6 +129,9 @@ class ChannelSecuritySettings(Base):
     network_auto_reject_categories: Mapped[list[str] | None] = mapped_column(
         JSON().with_variant(JSONB, "postgresql"), nullable=True
     )
+    instant_ban_categories: Mapped[list[str] | None] = mapped_column(
+        JSON().with_variant(JSONB, "postgresql"), nullable=True
+    )
     admin_ops_chat_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     wizard_completed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True

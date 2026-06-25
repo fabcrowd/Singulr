@@ -20,11 +20,13 @@ from singulr.bot.ban_flow import (
 from singulr.config import get_settings
 from singulr.db import SessionLocal
 from singulr.domain.ban_taxonomy import BanCategory
-from singulr.models import MessageLog, StylometryProfile
+from singulr.models import Ban, MessageLog, Profile, StylometryProfile
 from singulr.services.bans import record_ban as persist_ban
+from singulr.services.ban_history import format_ban_history_list
 from singulr.services.stylometry import extract_features, merge_feature_vectors
 from singulr.services.telegram_actions import (
     ban_member,
+    format_admin_profile_details,
     get_channel_title,
     grant_access,
     log_to_channel,
@@ -35,10 +37,25 @@ from singulr.services.telegram_actions import (
     send_verification_dm,
 )
 from singulr.services.reverification import require_reverification
+from singulr.services.social_profile import get_social_profile_provider
 from singulr.services.tokens import TokenRateLimitError, create_token
+from sqlalchemy import select
 from singulr.services.watcher import find_watcher_matches
 
 logger = logging.getLogger(__name__)
+
+
+async def _ban_history_for_fingerprint(fingerprint_hash: str | None) -> str | None:
+    """Load formatted ban history for admin review cards."""
+    if not fingerprint_hash:
+        return None
+    async with SessionLocal() as session:
+        rows = (
+            await session.scalars(select(Ban).where(Ban.fingerprint_hash == fingerprint_hash))
+        ).all()
+    if not rows:
+        return None
+    return format_ban_history_list(list(rows))
 
 
 def _parse_channel_user_callback(payload: str) -> tuple[int, int]:
@@ -209,6 +226,26 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         )
         if query.message:
             await query.message.reply_text(f"Denied user {user_id}")
+    elif data.startswith("details_"):
+        channel_id, user_id = _parse_channel_user_callback(data.removeprefix("details_"))
+        fingerprint_hash = None
+        async with SessionLocal() as session:
+            profile = await session.scalar(
+                select(Profile).where(Profile.telegram_user_id == user_id)
+            )
+            if profile:
+                fingerprint_hash = profile.fingerprint_hash
+        ban_history = await _ban_history_for_fingerprint(fingerprint_hash)
+        social = await get_social_profile_provider().analyze(telegram_user_id=user_id)
+        body = await format_admin_profile_details(
+            context.application,
+            user_id=user_id,
+            channel_id=channel_id,
+            ban_history=ban_history,
+            social_summary=social.summary or None,
+        )
+        if query.message:
+            await query.message.reply_text(body)
     elif data.startswith("ban_sev_"):
         severity = parse_ban_severity(data)
         user_id = context.user_data.pop(PENDING_BAN_USER_KEY, None)
@@ -314,9 +351,20 @@ async def apply_verification_decision(
     matched_ban_id: int | None = None,
 ) -> None:
     """Execute bot action after verification API returns."""
+    ban_history = await _ban_history_for_fingerprint(fingerprint_hash)
     if decision == "approve":
         await grant_access(app, channel_id, telegram_user_id)
-        await notify_user_result(app, telegram_user_id, approved=True)
+        await notify_user_result(
+            app, telegram_user_id, approved=True, channel_id=channel_id
+        )
+        await log_to_ops_channel(
+            app,
+            "APPROVED",
+            channel_id=channel_id,
+            admin_ops_chat_id=admin_ops_chat_id,
+            body=f"User {telegram_user_id} verified successfully.",
+            user_id=telegram_user_id,
+        )
         await log_to_channel(
             app,
             "APPROVED",
@@ -330,6 +378,17 @@ async def apply_verification_decision(
             reason=reason,
             risk_factors=risk_factors,
         )
+        await log_to_ops_channel(
+            app,
+            "ELEVATED_RISK",
+            channel_id=channel_id,
+            admin_ops_chat_id=admin_ops_chat_id,
+            user_id=telegram_user_id,
+            reason=reason,
+            risk_factors=risk_factors,
+            include_details_button=True,
+            ban_history=ban_history,
+        )
         await notify_user_result(app, telegram_user_id, approved=False, held=True)
     elif decision == "pending":
         await log_to_ops_channel(
@@ -341,6 +400,8 @@ async def apply_verification_decision(
             reason=reason,
             risk_factors=risk_factors,
             matched_ban_id=matched_ban_id,
+            ban_history=ban_history,
+            include_details_button=True,
         )
         await notify_user_result(app, telegram_user_id, approved=False, held=True)
     else:
@@ -355,4 +416,6 @@ async def apply_verification_decision(
             user_id=telegram_user_id,
             reason=reason,
             fingerprint_hash=fingerprint_hash,
+            ban_history=ban_history,
+            include_details_button=True,
         )

@@ -14,7 +14,7 @@ const token = params.get("token");
 
 const $ = (id) => document.getElementById(id);
 
-const states = ["loading", "blocked", "form", "success", "error"];
+const states = ["loading", "blocked", "pending", "form", "success", "error"];
 
 
 
@@ -414,13 +414,9 @@ async function submit(session) {
 
     }, 1200);
 
-  } else if (result.decision === "flag") {
+  } else if (result.decision === "pending" || result.decision === "flag") {
 
-    show("success");
-
-    $("success").querySelector("p").textContent =
-
-      "Submitted for review. Check Telegram for updates.";
+    show("pending");
 
   } else {
 

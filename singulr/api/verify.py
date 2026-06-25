@@ -15,7 +15,7 @@ from singulr.bot.handlers import apply_verification_decision
 from singulr.bot.runtime import get_application
 from singulr.config import VERIFICATION_SENTENCE, get_settings
 from singulr.db import get_session
-from singulr.models import Ban, IPSession, Profile
+from singulr.models import IPSession, Profile
 from singulr.services.bans import record_ban as persist_ban
 from singulr.services.blockchain import ChainClient
 from singulr.services.channel_policy import EffectivePolicy, get_effective_channel_policy
@@ -25,6 +25,7 @@ from singulr.services.matching import Decision, MatchResult, check_known_bad
 from singulr.services.reverification import STATUS_APPROVED, get_profile, is_reverification_required
 from singulr.services.rate_limit import allow_verify_request
 from singulr.services.tokens import mark_token_used, validate_token
+from singulr.services.verify_ban import block_ban_taxonomy
 
 router = APIRouter(prefix="/api", tags=["verify"])
 _chain = ChainClient()
@@ -269,18 +270,15 @@ async def submit(
     )
 
     if result.decision == Decision.BLOCK:
-        ban = Ban(
+        category, severity, ban_reason = block_ban_taxonomy(result)
+        await persist_ban(
+            session,
             telegram_user_id=token_row.telegram_user_id,
-            fingerprint_hash=fingerprint_hash,
-            ip_hash=ip_hash,
-            reason=result.reason,
+            channel_id=token_row.channel_id,
+            reason=ban_reason,
+            category=category,
+            severity=severity,
         )
-        session.add(ban)
-        await session.commit()
-        tx = await _chain.record_ban(fingerprint_hash, None, token_row.channel_id)
-        if tx:
-            ban.chain_tx = tx
-            await session.commit()
         payload = _decision_payload(
             decision="block",
             telegram_user_id=token_row.telegram_user_id,
@@ -323,6 +321,9 @@ async def submit(
             )
         )
     await session.commit()
+
+    if policy.network_registry_mode != "off":
+        await _chain.register_fingerprint(fingerprint_hash, token_row.channel_id)
 
     _log_verification_decision(
         telegram_user_id=token_row.telegram_user_id,

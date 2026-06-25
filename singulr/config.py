@@ -41,6 +41,9 @@ class Settings(BaseSettings):
     default_security_preset: str = "balanced"
     default_network_registry_mode: str = "read"
     ban_decay_months: int = 6
+    social_profile_provider: str = "none"
+    mock_social_hard_user_ids: str = ""
+    mock_social_soft_user_ids: str = ""
 
     trusted_channel_ids: str = ""
 

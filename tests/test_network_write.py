@@ -22,6 +22,7 @@ def _write_policy(**overrides: object) -> EffectivePolicy:
         "network_registry_mode": "read_write",
         "share_bans_to_network": True,
         "network_auto_reject_categories": ["scam_fraud"],
+        "instant_ban_categories": ["impersonation", "bot_abuse"],
         "admin_ops_chat_id": None,
     }
     base.update(overrides)

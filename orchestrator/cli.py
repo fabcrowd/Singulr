@@ -32,6 +32,15 @@ from orchestrator.prd import (
 from orchestrator.verifier import verify_task
 
 
+def _safe_print(text: str) -> None:
+    """Print text without crashing on Windows consoles that lack Unicode glyphs."""
+    encoding = sys.stdout.encoding or "utf-8"
+    try:
+        print(text)
+    except UnicodeEncodeError:
+        print(text.encode(encoding, errors="replace").decode(encoding))
+
+
 def cmd_status(_: argparse.Namespace) -> int:
     """Print task dashboard."""
     tasks = load_tasks()
@@ -189,7 +198,7 @@ def cmd_autopilot_use(args: argparse.Namespace) -> int:
 def cmd_autopilot_status(_: argparse.Namespace) -> int:
     """Print autopilot requirement dashboard."""
     try:
-        print(status_summary())
+        _safe_print(status_summary())
     except FileNotFoundError as exc:
         print(exc)
         return 1

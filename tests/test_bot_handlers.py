@@ -56,9 +56,12 @@ async def test_apply_verification_decision_approve_grants_access(
     grant_access = AsyncMock()
     notify = AsyncMock()
     log_channel = AsyncMock()
+    log_ops = AsyncMock()
     monkeypatch.setattr("singulr.bot.handlers.grant_access", grant_access)
     monkeypatch.setattr("singulr.bot.handlers.notify_user_result", notify)
     monkeypatch.setattr("singulr.bot.handlers.log_to_channel", log_channel)
+    monkeypatch.setattr("singulr.bot.handlers.log_to_ops_channel", log_ops)
+    monkeypatch.setattr("singulr.bot.handlers._ban_history_for_fingerprint", AsyncMock(return_value=None))
 
     app = _mock_app()
     await apply_verification_decision(
@@ -69,8 +72,9 @@ async def test_apply_verification_decision_approve_grants_access(
     )
 
     grant_access.assert_awaited_once_with(app, 100, 5002)
-    notify.assert_awaited_once_with(app, 5002, approved=True)
+    notify.assert_awaited_once_with(app, 5002, approved=True, channel_id=100)
     log_channel.assert_awaited_once()
+    log_ops.assert_awaited_once()
 
 
 @pytest.mark.asyncio
@@ -82,10 +86,13 @@ async def test_apply_verification_decision_flag_holds_without_ban(
     grant_access = AsyncMock()
     notify = AsyncMock()
     log_channel = AsyncMock()
+    log_ops = AsyncMock()
     monkeypatch.setattr("singulr.bot.handlers.ban_member", ban_member)
     monkeypatch.setattr("singulr.bot.handlers.grant_access", grant_access)
     monkeypatch.setattr("singulr.bot.handlers.notify_user_result", notify)
     monkeypatch.setattr("singulr.bot.handlers.log_to_channel", log_channel)
+    monkeypatch.setattr("singulr.bot.handlers.log_to_ops_channel", log_ops)
+    monkeypatch.setattr("singulr.bot.handlers._ban_history_for_fingerprint", AsyncMock(return_value=None))
 
     app = _mock_app()
     await apply_verification_decision(
@@ -102,6 +109,7 @@ async def test_apply_verification_decision_flag_holds_without_ban(
     notify.assert_awaited_once()
     assert notify.await_args.kwargs.get("held") is True
     log_channel.assert_awaited_once()
+    log_ops.assert_awaited_once()
 
 
 @pytest.mark.asyncio

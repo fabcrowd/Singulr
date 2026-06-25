@@ -32,6 +32,22 @@ async def _count_recent_tokens(session: AsyncSession, telegram_user_id: int) -> 
     return int(count or 0)
 
 
+async def _invalidate_stale_tokens(session: AsyncSession, telegram_user_id: int) -> None:
+    """Mark unused tokens for this user consumed so only the latest link works."""
+    rows = (
+        await session.scalars(
+            select(VerificationToken).where(
+                VerificationToken.telegram_user_id == telegram_user_id,
+                VerificationToken.used.is_(False),
+            )
+        )
+    ).all()
+    for row in rows:
+        row.used = True
+    if rows:
+        await session.commit()
+
+
 async def create_token(
     session: AsyncSession,
     telegram_user_id: int,
@@ -42,6 +58,8 @@ async def create_token(
         raise TokenRateLimitError(
             f"User {telegram_user_id} exceeded {MAX_TOKENS_PER_USER_PER_24H} tokens per 24h"
         )
+
+    await _invalidate_stale_tokens(session, telegram_user_id)
 
     settings = get_settings()
     token = secrets.token_urlsafe(32)

@@ -256,3 +256,28 @@ async def test_submit_block_ban_evasion_auto_deny_not_pending(
     notify_payload = mock_notify.await_args.args[0]
     assert notify_payload["decision"] == "block"
     assert notify_payload["security_preset"] == "balanced"
+
+
+@pytest.mark.asyncio
+@patch("singulr.api.verify._chain.register_fingerprint", new_callable=AsyncMock)
+@patch("singulr.api.verify._notify_bot", new_callable=AsyncMock)
+async def test_submit_approve_registers_fingerprint_on_chain(
+    mock_notify: AsyncMock,
+    mock_register: AsyncMock,
+    api_client: httpx.AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """Approve path registers fingerprint when network registry is enabled."""
+    token = await create_token(db_session, telegram_user_id=1001, channel_id=42)
+
+    response = await api_client.post(
+        "/api/verify/submit",
+        json=_submit_body(token),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["decision"] == "approve"
+    mock_register.assert_awaited_once()
+    fingerprint_arg = mock_register.await_args.args[0]
+    assert fingerprint_arg.startswith("0x")
+    mock_notify.assert_awaited_once()

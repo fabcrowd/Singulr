@@ -1,0 +1,708 @@
+{
+  "$schema": "https://raw.githubusercontent.com/Gens-ai/autopilot/main/tasks.schema.json",
+  "name": "feature",
+  "description": "Simplified member join and verify journey: minimal web UX, channel-branded bot DMs, fair instant-ban policy, admin More details with social profile scoring, blockchain profile as true north",
+  "goals": [
+    "Frictionless member UX \u2014 verification feels routine; background checks invisible",
+    "Clear outcomes \u2014 approve DM with channel link; restrict shows Account restricted only",
+    "Fair instant ban \u2014 local evasion and configured severe categories only",
+    "Cross-channel accountability \u2014 prior bans surface in admin review with dated reasons",
+    "Compounding blockchain profile enriched on each join and evasion catch",
+    "Operator visibility \u2014 all outcomes in admin channel with More details and social API enrichment"
+  ],
+  "nonGoals": [
+    "End-user login or passwords",
+    "Showing ban reasons or network history to joiners",
+    "Full OSINT analyst dashboard beyond Telegram admin cards",
+    "Requiring social links on the verify page in v1",
+    "Replacing the /security wizard (consumes its policy outputs only)",
+    "Multi-language copy in v1"
+  ],
+  "technicalNotes": "Extend handlers.py, telegram_actions.py, tokens.py, matching.py, verify.py, static/verify.* \u2014 do not replace network-trust-registry stack. Split local ban evasion (BLOCK) from cross-channel on-chain history (PENDING). Add singulr/services/social_profile.py with pluggable provider; mock provider for tests. BanRegistry registrar ACL already exists from network-trust-registry pack.",
+  "_tdd": true,
+  "_priority_order": [
+    "1. Token policy and member-visible copy (DM + web)",
+    "2. Matching decision tree \u2014 network history vs local evasion",
+    "3. social_profile abstraction + admin More details",
+    "4. Structured auto-ban and on-chain register on approve",
+    "5. Journey integration tests"
+  ],
+  "_step_size": "One logical change per commit. Quality over speed.",
+  "requirements": [
+    {
+      "id": "1",
+      "category": "functional",
+      "description": "One active verification token per user \u2014 new join invalidates previous unused tokens",
+      "codeAnalysis": {
+        "approach": "extend",
+        "existingFiles": [
+          "singulr/services/tokens.py",
+          "singulr/models.py"
+        ],
+        "relatedTests": [
+          "tests/test_tokens.py"
+        ],
+        "patterns": [
+          "create_token commits VerificationToken row",
+          "10 min expiry via token_expiry_minutes config"
+        ],
+        "targetFiles": {
+          "modify": [
+            "singulr/services/tokens.py"
+          ],
+          "create": []
+        }
+      },
+      "acceptance": [
+        "create_token marks prior unused tokens for same telegram_user_id as used or deletes them",
+        "Only the latest token validates successfully",
+        "token_expiry_minutes remains 10 by default",
+        "pytest tests/test_tokens.py includes one-active-link test"
+      ],
+      "tdd": {
+        "test": {
+          "description": "Add test_tokens test: second create_token invalidates first unused token",
+          "file": "tests/test_tokens.py",
+          "passes": false
+        },
+        "implement": {
+          "description": "In create_token, invalidate or mark used all other unused tokens for telegram_user_id before issuing new token",
+          "passes": false
+        },
+        "refactor": {
+          "description": "Extract _invalidate_stale_tokens helper if logic grows",
+          "passes": false
+        }
+      },
+      "verification": [
+        "New join request yields only one valid verify URL",
+        "Old link returns link_expired on precheck/submit"
+      ],
+      "passes": true
+    },
+    {
+      "id": "2",
+      "category": "ui",
+      "description": "Channel-branded join DM and approval DM with link to open the channel",
+      "dependsOn": [
+        "1"
+      ],
+      "codeAnalysis": {
+        "approach": "modify",
+        "existingFiles": [
+          "singulr/services/telegram_actions.py",
+          "singulr/bot/handlers.py"
+        ],
+        "relatedTests": [
+          "tests/test_bot_handlers.py",
+          "tests/test_reverification.py"
+        ],
+        "patterns": [
+          "send_verification_dm uses channel_name param",
+          "grant_access then notify_user_result on approve"
+        ],
+        "targetFiles": {
+          "modify": [
+            "singulr/services/telegram_actions.py",
+            "singulr/bot/handlers.py"
+          ],
+          "create": []
+        }
+      },
+      "acceptance": [
+        "Join DM copy includes Finish joining {Channel Name} pattern without Singulr security jargon",
+        "Approval DM includes t.me/c/ or invite link to the channel",
+        "Pending DM uses PRD copy: verification under review; notification in Telegram DMs when complete",
+        "Deny/restrict DM does not include detailed ban reason",
+        "pytest covers join DM and approve DM content"
+      ],
+      "tdd": {
+        "test": {
+          "description": "Extend test_bot_handlers.py: assert channel-branded join text and approve DM contains channel link",
+          "file": "tests/test_bot_handlers.py",
+          "passes": false
+        },
+        "implement": {
+          "description": "Update send_verification_dm, notify_user_result, notify_user_denied; add channel deep link helper in apply_verification_decision approve path",
+          "passes": false
+        },
+        "refactor": {
+          "description": "Centralize member-facing copy constants in telegram_actions or singulr/copy/member.py",
+          "passes": false
+        }
+      },
+      "verification": [
+        "Manual: join request DM matches PRD tone",
+        "Approve path DM opens correct channel"
+      ],
+      "passes": true
+    },
+    {
+      "id": "3",
+      "category": "ui",
+      "description": "Minimal verify webpage \u2014 generic restricted copy, under-review state, no security jargon",
+      "codeAnalysis": {
+        "approach": "modify",
+        "existingFiles": [
+          "static/verify.html",
+          "static/verify.js",
+          "static/verify.css",
+          "singulr/api/verify.py"
+        ],
+        "relatedTests": [
+          "tests/test_verify_page.py",
+          "tests/test_api_verify.py"
+        ],
+        "patterns": [
+          "verify.js shows #blocked on precheck allowed=false",
+          "submit maps decision to UI states"
+        ],
+        "targetFiles": {
+          "modify": [
+            "static/verify.html",
+            "static/verify.js",
+            "static/verify.css",
+            "singulr/api/verify.py"
+          ],
+          "create": []
+        }
+      },
+      "acceptance": [
+        "Block/restrict UI shows Account restricted only \u2014 no admin contact blame text",
+        "Pending shows under-review message distinct from restricted",
+        "Success state is minimal \u2014 no lock emoji or fraud-prevention copy",
+        "Page title and headings do not mention blockchain or fingerprinting",
+        "pytest test_verify_page or new test_verify_ui.py asserts key strings in static assets"
+      ],
+      "tdd": {
+        "test": {
+          "description": "Add tests/test_verify_ui.py: read static HTML/JS for Account restricted and absence of security jargon",
+          "file": "tests/test_verify_ui.py",
+          "passes": false
+        },
+        "implement": {
+          "description": "Update verify.html/js/css; ensure submit API returns decision field client uses for pending vs block UI",
+          "passes": false
+        },
+        "refactor": {
+          "description": "Share outcome copy strings between API error responses and static fallbacks",
+          "passes": false
+        }
+      },
+      "verification": [
+        "precheck block shows Account restricted",
+        "submit pending shows under review not blocked"
+      ],
+      "passes": true
+    },
+    {
+      "id": "4",
+      "category": "functional",
+      "description": "Matching policy: cross-channel on-chain/network history \u2192 PENDING; local ban evasion stays BLOCK",
+      "codeAnalysis": {
+        "approach": "modify",
+        "existingFiles": [
+          "singulr/services/matching.py",
+          "singulr/services/network_reputation.py",
+          "singulr/services/channel_policy.py"
+        ],
+        "relatedTests": [
+          "tests/test_matching.py",
+          "tests/test_network_reputation.py",
+          "tests/test_api_verify.py"
+        ],
+        "patterns": [
+          "chain.is_banned currently returns BLOCK",
+          "network_decision_from_score returns block at reject_min",
+          "local dual-threshold ban evasion in _ban_evasion_result"
+        ],
+        "targetFiles": {
+          "modify": [
+            "singulr/services/matching.py",
+            "singulr/services/network_reputation.py"
+          ],
+          "create": []
+        }
+      },
+      "acceptance": [
+        "chain.is_banned true without local evasion match returns PENDING not BLOCK",
+        "Network reputation score in review band returns PENDING not BLOCK",
+        "Local ban evasion above auto_deny threshold still returns BLOCK",
+        "pytest tests/test_matching.py covers cross-channel pending vs local evasion block"
+      ],
+      "tdd": {
+        "test": {
+          "description": "Add matching tests: mock chain.is_banned \u2192 PENDING; mock evasion \u2192 BLOCK",
+          "file": "tests/test_matching.py",
+          "passes": false
+        },
+        "implement": {
+          "description": "Refactor check_known_bad: separate network_history_outcome from local_evasion; map network-only hits to PENDING",
+          "passes": false
+        },
+        "refactor": {
+          "description": "Document decision tree in matching module docstring",
+          "passes": false
+        }
+      },
+      "verification": [
+        "API submit returns pending for on-chain-only hit",
+        "API submit returns block for high-confidence local evasion"
+      ],
+      "passes": true
+    },
+    {
+      "id": "5",
+      "category": "functional",
+      "description": "Per-channel instant-ban categories (impersonation, bot_abuse) distinct from network review categories",
+      "dependsOn": [
+        "4"
+      ],
+      "codeAnalysis": {
+        "approach": "extend",
+        "existingFiles": [
+          "singulr/models.py",
+          "singulr/services/channel_policy.py",
+          "singulr/bot/security_wizard.py"
+        ],
+        "relatedTests": [
+          "tests/test_channel_policy.py",
+          "tests/test_security_wizard.py"
+        ],
+        "patterns": [
+          "network_auto_reject_categories on ChannelSecuritySettings",
+          "EffectivePolicy dataclass in channel_policy.py"
+        ],
+        "targetFiles": {
+          "modify": [
+            "singulr/models.py",
+            "singulr/services/channel_policy.py",
+            "singulr/bot/security_wizard.py"
+          ],
+          "create": []
+        }
+      },
+      "acceptance": [
+        "ChannelSecuritySettings has instant_ban_categories list field",
+        "get_effective_channel_policy exposes instant_ban_categories with defaults impersonation and bot_abuse",
+        "Security wizard or policy API allows admins to configure instant-ban vs review-only categories",
+        "pytest tests/test_channel_policy.py covers instant_ban_categories resolution"
+      ],
+      "tdd": {
+        "test": {
+          "description": "Add channel_policy tests for instant_ban_categories defaults and override",
+          "file": "tests/test_channel_policy.py",
+          "passes": false
+        },
+        "implement": {
+          "description": "Add column + EffectivePolicy field; wire wizard step or extend network categories step with instant-ban toggles",
+          "passes": false
+        },
+        "refactor": {
+          "description": "Clarify naming: instant_ban_categories vs network_auto_reject_categories in format_policy_summary",
+          "passes": false
+        }
+      },
+      "verification": [
+        "Policy row persists instant_ban_categories JSON",
+        "Matching can read policy.instant_ban_categories"
+      ],
+      "passes": true
+    },
+    {
+      "id": "6",
+      "category": "functional",
+      "description": "Verify BLOCK path persists structured ban with category, severity, and reason; respects instant-ban policy",
+      "dependsOn": [
+        "4",
+        "5"
+      ],
+      "codeAnalysis": {
+        "approach": "extend",
+        "existingFiles": [
+          "singulr/api/verify.py",
+          "singulr/services/bans.py",
+          "singulr/bot/handlers.py"
+        ],
+        "relatedTests": [
+          "tests/test_api_verify.py",
+          "tests/test_bans.py"
+        ],
+        "patterns": [
+          "apply_verification_decision block calls ban_member",
+          "persist_ban accepts BanCategory and BanSeverity",
+          "verify submit creates Ban with reason string only today"
+        ],
+        "targetFiles": {
+          "modify": [
+            "singulr/api/verify.py",
+            "singulr/bot/handlers.py"
+          ],
+          "create": []
+        }
+      },
+      "acceptance": [
+        "submit BLOCK from local evasion calls persist_ban with category ban_evasion and appropriate severity",
+        "Instant-ban category flags use configured category on persist_ban",
+        "Ban row includes non-empty reason text for audit",
+        "pytest test_api_verify.py asserts Ban category/severity after block submit"
+      ],
+      "tdd": {
+        "test": {
+          "description": "Extend test_api_verify.py: block submit persists Ban with category and severity",
+          "file": "tests/test_api_verify.py",
+          "passes": false
+        },
+        "implement": {
+          "description": "Map MatchResult reason/risk_factors to BanCategory; call persist_ban in verify submit and apply_verification_decision block paths",
+          "passes": false
+        },
+        "refactor": {
+          "description": "Extract map_block_to_ban_taxonomy() helper shared by API and bot",
+          "passes": false
+        }
+      },
+      "verification": [
+        "Admin list_bans shows category on auto-ban rows",
+        "Network write path still gated by should_contribute_to_network"
+      ],
+      "passes": true
+    },
+    {
+      "id": "7",
+      "category": "functional",
+      "description": "Admin channel reports all verify outcomes; pending/restrict cards include network ban history list",
+      "dependsOn": [
+        "4"
+      ],
+      "codeAnalysis": {
+        "approach": "extend",
+        "existingFiles": [
+          "singulr/services/telegram_actions.py",
+          "singulr/bot/handlers.py",
+          "singulr/services/blockchain.py"
+        ],
+        "relatedTests": [
+          "tests/test_bot_ops_workflow.py",
+          "tests/test_log_format.py"
+        ],
+        "patterns": [
+          "log_to_channel for APPROVED",
+          "log_to_ops_channel for PENDING and BLOCK with Permit/Deny keyboard",
+          "format_pending_review_body includes matched_ban_id only"
+        ],
+        "targetFiles": {
+          "modify": [
+            "singulr/services/telegram_actions.py",
+            "singulr/bot/handlers.py"
+          ],
+          "create": [
+            "singulr/services/ban_history.py"
+          ]
+        }
+      },
+      "acceptance": [
+        "Approve events post compact line to admin ops or log channel per config",
+        "Pending and restrict cards list Banned on {date} for {reason} per network/local ban row",
+        "format_ban_history_list() returns admin-only multi-line history",
+        "pytest tests/test_log_format.py or test_admin_reporting.py covers history formatting"
+      ],
+      "tdd": {
+        "test": {
+          "description": "Add tests/test_admin_reporting.py: ban history formatter and pending body includes dated reasons",
+          "file": "tests/test_admin_reporting.py",
+          "passes": false
+        },
+        "implement": {
+          "description": "Create ban_history.py; extend format_pending_review_body and ops cards; ensure approve also logs to admin feed",
+          "passes": false
+        },
+        "refactor": {
+          "description": "Unify log_to_channel vs log_to_ops_channel routing behind resolve_admin_feed_chat_id",
+          "passes": false
+        }
+      },
+      "verification": [
+        "Pending card shows cross-channel ban lines when chain/local history exists",
+        "Approve produces admin channel entry"
+      ],
+      "passes": true
+    },
+    {
+      "id": "8",
+      "category": "integration",
+      "description": "social_profile service with pluggable provider and mock implementation for tests",
+      "codeAnalysis": {
+        "approach": "create",
+        "existingFiles": [
+          "singulr/services/matching.py",
+          "singulr/config.py"
+        ],
+        "relatedTests": [],
+        "patterns": [
+          "Env-based config in config.py",
+          "Service modules under singulr/services/"
+        ],
+        "targetFiles": {
+          "modify": [
+            "singulr/config.py"
+          ],
+          "create": [
+            "singulr/services/social_profile.py",
+            "tests/test_social_profile.py"
+          ]
+        }
+      },
+      "acceptance": [
+        "SocialProfileProvider protocol with analyze(telegram_user_id, username, ...) -> SocialProfileResult",
+        "MockSocialProfileProvider returns configurable category flags and risk score",
+        "analyze() times out gracefully; failures return empty result not exception to caller",
+        "pytest tests/test_social_profile.py passes"
+      ],
+      "tdd": {
+        "test": {
+          "description": "Create tests/test_social_profile.py: mock provider hard bot flag and soft review signal",
+          "file": "tests/test_social_profile.py",
+          "passes": false
+        },
+        "implement": {
+          "description": "Create social_profile.py with provider interface, MockProvider, get_social_profile_provider() factory from env",
+          "passes": false
+        },
+        "refactor": {
+          "description": "Add SOCIAL_PROFILE_PROVIDER=mock|none env defaulting to mock in tests",
+          "passes": false
+        }
+      },
+      "verification": [
+        "Provider swappable via config",
+        "No external HTTP in unit tests"
+      ],
+      "passes": true
+    },
+    {
+      "id": "9",
+      "category": "integration",
+      "description": "Integrate social_profile into verify/matching \u2014 hard category instant ban, soft signals to review",
+      "dependsOn": [
+        "5",
+        "8"
+      ],
+      "codeAnalysis": {
+        "approach": "extend",
+        "existingFiles": [
+          "singulr/services/matching.py",
+          "singulr/api/verify.py"
+        ],
+        "relatedTests": [
+          "tests/test_matching.py",
+          "tests/test_api_verify.py"
+        ],
+        "patterns": [
+          "check_known_bad returns MatchResult with Decision enum",
+          "instant_ban_categories from EffectivePolicy"
+        ],
+        "targetFiles": {
+          "modify": [
+            "singulr/services/matching.py",
+            "singulr/api/verify.py"
+          ],
+          "create": []
+        }
+      },
+      "acceptance": [
+        "check_known_bad calls social_profile.analyze when provider enabled",
+        "Hard API category in instant_ban_categories returns BLOCK",
+        "Soft API score contributes to PENDING not BLOCK alone",
+        "API failure skips social check without member-visible error",
+        "pytest tests/test_matching.py covers social hard and soft paths with mock provider"
+      ],
+      "tdd": {
+        "test": {
+          "description": "Add matching tests with patched mock provider: impersonation \u2192 BLOCK, low score \u2192 PENDING or no block",
+          "file": "tests/test_matching.py",
+          "passes": false
+        },
+        "implement": {
+          "description": "Wire social_profile into check_known_bad after local checks; map results using instant_ban_categories policy",
+          "passes": false
+        },
+        "refactor": {
+          "description": "Cache analyze result on request.state or pass through MatchResult risk_factors",
+          "passes": false
+        }
+      },
+      "verification": [
+        "Submit with mock bot flag blocks when policy allows",
+        "Submit with mock soft flag pending when no local evasion"
+      ],
+      "passes": true
+    },
+    {
+      "id": "10",
+      "category": "ui",
+      "description": "Admin More details callback \u2014 expanded Telegram + social + ban history profile",
+      "dependsOn": [
+        "7",
+        "8"
+      ],
+      "codeAnalysis": {
+        "approach": "extend",
+        "existingFiles": [
+          "singulr/bot/handlers.py",
+          "singulr/services/telegram_actions.py"
+        ],
+        "relatedTests": [
+          "tests/test_bot_ops_workflow.py"
+        ],
+        "patterns": [
+          "on_callback handles permit_/deny_ prefixes",
+          "InlineKeyboardButton in log_to_ops_channel"
+        ],
+        "targetFiles": {
+          "modify": [
+            "singulr/bot/handlers.py",
+            "singulr/services/telegram_actions.py"
+          ],
+          "create": []
+        }
+      },
+      "acceptance": [
+        "Ops messages for pending/restrict include More details button with callback details_{channel_id}_{user_id}",
+        "Callback posts expanded admin-only message with Telegram fields, risk factors, social_profile summary, ban history",
+        "pytest tests/test_admin_reporting.py or test_bot_handlers.py covers details callback",
+        "No member-visible leakage from details action"
+      ],
+      "tdd": {
+        "test": {
+          "description": "Add test: details_ callback edits or replies with expanded profile sections",
+          "file": "tests/test_admin_reporting.py",
+          "passes": false
+        },
+        "implement": {
+          "description": "Add details_ handler branch in on_callback; format_admin_profile_details() in telegram_actions",
+          "passes": false
+        },
+        "refactor": {
+          "description": "Reuse ban_history formatter and social_profile.analyze in details builder",
+          "passes": false
+        }
+      },
+      "verification": [
+        "Pending card shows More details button",
+        "Tap returns multi-section admin message"
+      ],
+      "passes": true
+    },
+    {
+      "id": "11",
+      "category": "integration",
+      "description": "Register fingerprint on-chain when verification approves",
+      "codeAnalysis": {
+        "approach": "extend",
+        "existingFiles": [
+          "singulr/api/verify.py",
+          "singulr/services/blockchain.py"
+        ],
+        "relatedTests": [
+          "tests/test_blockchain.py",
+          "tests/test_api_verify.py"
+        ],
+        "patterns": [
+          "ChainClient.register_fingerprint exists but uncalled from verify flow",
+          "channel policy network_registry_mode gates chain writes"
+        ],
+        "targetFiles": {
+          "modify": [
+            "singulr/api/verify.py"
+          ],
+          "create": []
+        }
+      },
+      "acceptance": [
+        "Successful approve submit calls register_fingerprint when chain enabled and policy not off",
+        "Skipped when chain disabled without failing approve",
+        "pytest test_api_verify.py mocks ChainClient.register_fingerprint called on approve",
+        "Evasion BLOCK still calls record_ban not register on same submit"
+      ],
+      "tdd": {
+        "test": {
+          "description": "Extend test_api_verify.py: mock register_fingerprint on clean approve",
+          "file": "tests/test_api_verify.py",
+          "passes": false
+        },
+        "implement": {
+          "description": "After approve decision in verify submit, call _chain.register_fingerprint(fingerprint_hash, channel_id)",
+          "passes": false
+        },
+        "refactor": {
+          "description": "Extract maybe_register_fingerprint(session, policy, hash, channel_id) helper",
+          "passes": false
+        }
+      },
+      "verification": [
+        "Approve path invokes register when chain mock enabled",
+        "Block path does not register"
+      ],
+      "passes": true
+    },
+    {
+      "id": "12",
+      "category": "functional",
+      "description": "Member verify journey integration tests \u2014 join DM through approve/restrict/pending paths",
+      "dependsOn": [
+        "2",
+        "3",
+        "4"
+      ],
+      "codeAnalysis": {
+        "approach": "create",
+        "existingFiles": [
+          "tests/test_bot_handlers.py",
+          "tests/test_api_verify.py",
+          "tests/test_bot_ops_workflow.py"
+        ],
+        "relatedTests": [
+          "tests/test_bot_handlers.py",
+          "tests/test_api_verify.py"
+        ],
+        "patterns": [
+          "Mock Application and SessionLocal in handler tests",
+          "api_client fixture for verify API"
+        ],
+        "targetFiles": {
+          "modify": [],
+          "create": [
+            "tests/test_member_verify_journey.py"
+          ]
+        }
+      },
+      "acceptance": [
+        "tests/test_member_verify_journey.py exists with at least 4 test functions",
+        "Covers approve grant+DM, restrict Account restricted UI path, pending Permit flow, token invalidation on re-join",
+        "pytest tests/test_member_verify_journey.py passes",
+        "scripts/verify.ps1 green"
+      ],
+      "tdd": {
+        "test": {
+          "description": "Create tests/test_member_verify_journey.py with journey scenarios using existing fixtures",
+          "file": "tests/test_member_verify_journey.py",
+          "passes": false
+        },
+        "implement": {
+          "description": "Fix any gaps exposed by journey tests in prior reqs; no new features in this req",
+          "passes": false
+        },
+        "refactor": {
+          "description": "Extract shared journey fixtures to conftest if duplicated",
+          "passes": false
+        }
+      },
+      "verification": [
+        "Full verify.ps1 passes",
+        "Journey tests document PRD F1-F5 behavior"
+      ],
+      "passes": true
+    }
+  ]
+}

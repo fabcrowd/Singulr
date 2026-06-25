@@ -22,6 +22,7 @@ def _policy(**overrides: object) -> EffectivePolicy:
         "network_registry_mode": "read",
         "share_bans_to_network": False,
         "network_auto_reject_categories": ["scam_fraud", "raid_coordination"],
+        "instant_ban_categories": ["impersonation", "bot_abuse"],
         "admin_ops_chat_id": None,
     }
     base.update(overrides)
@@ -59,7 +60,7 @@ def test_network_registry_off_skips_decision() -> None:
 async def test_matching_blocks_on_high_network_score(
     db_session,
 ) -> None:
-    """check_known_bad blocks when mocked chain reputation is above reject threshold."""
+    """check_known_bad sends high network score to pending review."""
     from unittest.mock import AsyncMock, MagicMock
 
     from singulr.models import Ban
@@ -91,5 +92,5 @@ async def test_matching_blocks_on_high_network_score(
         channel_id=42,
     )
 
-    assert result.decision == Decision.BLOCK
+    assert result.decision == Decision.PENDING
     assert any("network_score" in factor for factor in result.risk_factors)

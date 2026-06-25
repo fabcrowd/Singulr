@@ -20,6 +20,7 @@ async def test_missing_row_uses_balanced_config_defaults(db_session: AsyncSessio
     assert policy.ban_evasion_auto_deny_threshold == 0.92
     assert policy.local_similarity_flag_threshold == 0.85
     assert policy.network_registry_mode == "read"
+    assert policy.instant_ban_categories == ["impersonation", "bot_abuse"]
     assert policy.admin_ops_chat_id is None
 
 
@@ -58,6 +59,7 @@ def test_effective_policy_field_types() -> None:
         network_registry_mode="read",
         share_bans_to_network=False,
         network_auto_reject_categories=["scam_fraud", "raid_coordination"],
+        instant_ban_categories=["impersonation", "bot_abuse"],
         admin_ops_chat_id=None,
     )
 

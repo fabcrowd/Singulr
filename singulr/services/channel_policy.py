@@ -22,10 +22,12 @@ class EffectivePolicy:
     network_registry_mode: str
     share_bans_to_network: bool
     network_auto_reject_categories: list[str]
+    instant_ban_categories: list[str]
     admin_ops_chat_id: int | None
 
 
 DEFAULT_NETWORK_AUTO_REJECT = ["scam_fraud", "raid_coordination"]
+DEFAULT_INSTANT_BAN_CATEGORIES = ["impersonation", "bot_abuse"]
 
 
 async def get_effective_channel_policy(
@@ -45,6 +47,7 @@ async def get_effective_channel_policy(
             network_registry_mode=settings.default_network_registry_mode,
             share_bans_to_network=False,
             network_auto_reject_categories=list(DEFAULT_NETWORK_AUTO_REJECT),
+            instant_ban_categories=list(DEFAULT_INSTANT_BAN_CATEGORIES),
             admin_ops_chat_id=settings.log_channel_id or None,
         )
 
@@ -65,6 +68,9 @@ async def get_effective_channel_policy(
         share_bans_to_network=row.share_bans_to_network,
         network_auto_reject_categories=list(
             row.network_auto_reject_categories or DEFAULT_NETWORK_AUTO_REJECT
+        ),
+        instant_ban_categories=list(
+            row.instant_ban_categories or DEFAULT_INSTANT_BAN_CATEGORIES
         ),
         admin_ops_chat_id=row.admin_ops_chat_id,
     )
@@ -132,6 +138,8 @@ async def upsert_channel_security_settings(
         row.network_auto_reject_categories = network_auto_reject_categories
     elif row.network_auto_reject_categories is None:
         row.network_auto_reject_categories = list(DEFAULT_NETWORK_AUTO_REJECT)
+    if row.instant_ban_categories is None:
+        row.instant_ban_categories = list(DEFAULT_INSTANT_BAN_CATEGORIES)
     row.admin_ops_chat_id = admin_ops_chat_id
     row.wizard_completed_at = datetime.now(UTC)
     row.wizard_version = 2

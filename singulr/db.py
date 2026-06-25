@@ -44,6 +44,7 @@ async def _apply_schema_patches(conn) -> None:
             "ALTER TABLE bans ADD COLUMN IF NOT EXISTS overturned_at TIMESTAMPTZ",
             "ALTER TABLE channel_security_settings ADD COLUMN IF NOT EXISTS share_bans_to_network BOOLEAN DEFAULT FALSE",
             "ALTER TABLE channel_security_settings ADD COLUMN IF NOT EXISTS network_auto_reject_categories JSONB",
+            "ALTER TABLE channel_security_settings ADD COLUMN IF NOT EXISTS instant_ban_categories JSONB",
             "ALTER TABLE channel_security_settings ADD COLUMN IF NOT EXISTS wizard_version INTEGER DEFAULT 1",
         ]
         for statement in statements:
@@ -73,6 +74,10 @@ async def _apply_schema_patches(conn) -> None:
     if settings_cols and "network_auto_reject_categories" not in settings_cols:
         await conn.execute(
             text("ALTER TABLE channel_security_settings ADD COLUMN network_auto_reject_categories JSON")
+        )
+    if settings_cols and "instant_ban_categories" not in settings_cols:
+        await conn.execute(
+            text("ALTER TABLE channel_security_settings ADD COLUMN instant_ban_categories JSON")
         )
     if settings_cols and "wizard_version" not in settings_cols:
         await conn.execute(

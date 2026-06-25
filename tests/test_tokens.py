@@ -78,3 +78,15 @@ async def test_create_token_rate_limit_blocks_fourth_within_24h(db_session: Asyn
 
     with pytest.raises(TokenRateLimitError):
         await create_token(db_session, user_id, channel_id)
+
+
+@pytest.mark.asyncio
+async def test_create_token_invalidates_previous_unused_token(db_session: AsyncSession) -> None:
+    """A new token marks prior unused tokens for the same user as used."""
+    user_id = 42_002
+    first = await create_token(db_session, user_id, channel_id=1)
+    assert await validate_token(db_session, first) is not None
+
+    second = await create_token(db_session, user_id, channel_id=1)
+    assert await validate_token(db_session, first) is None
+    assert await validate_token(db_session, second) is not None

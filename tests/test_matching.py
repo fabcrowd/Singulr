@@ -49,6 +49,7 @@ _DEFAULT_POLICY = EffectivePolicy(
     network_registry_mode="read",
     share_bans_to_network=False,
     network_auto_reject_categories=["scam_fraud", "raid_coordination"],
+    instant_ban_categories=["impersonation", "bot_abuse"],
     admin_ops_chat_id=None,
 )
 
@@ -241,7 +242,7 @@ async def test_flags_keystroke_similarity_to_banned_profile(db_session: AsyncSes
 
 @pytest.mark.asyncio
 async def test_blocks_on_chain_blacklist(db_session: AsyncSession) -> None:
-    """On-chain ban registry blocks before local similarity checks."""
+    """On-chain ban registry sends cross-channel hits to pending review."""
     fingerprint = "0x" + "11" * 32
     chain = _chain_mock(banned=True)
 
@@ -253,7 +254,7 @@ async def test_blocks_on_chain_blacklist(db_session: AsyncSession) -> None:
         ip_hash=None,
     )
 
-    assert result.decision == Decision.BLOCK
+    assert result.decision == Decision.PENDING
     assert "chain_blacklist" in result.risk_factors
     chain.is_banned.assert_awaited_once_with(fingerprint)
 
@@ -293,3 +294,29 @@ async def test_flags_ip_velocity_multi_account_same_ip(db_session: AsyncSession)
 
     assert result.decision == Decision.FLAG
     assert "ip_velocity" in result.risk_factors
+
+
+@pytest.mark.asyncio
+async def test_social_hard_category_instant_ban(
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Hard social category in instant_ban list blocks immediately."""
+    monkeypatch.setenv("SOCIAL_PROFILE_PROVIDER", "mock")
+    monkeypatch.setenv("MOCK_SOCIAL_HARD_USER_IDS", "7777")
+    from singulr.config import get_settings
+
+    get_settings.cache_clear()
+
+    result = await check_known_bad(
+        db_session,
+        _chain_mock(),
+        telegram_user_id=7777,
+        fingerprint_hash="0x" + "44" * 32,
+        ip_hash=None,
+        channel_id=42,
+        policy=_DEFAULT_POLICY,
+    )
+
+    assert result.decision == Decision.BLOCK
+    assert any("social_hard" in factor for factor in result.risk_factors)

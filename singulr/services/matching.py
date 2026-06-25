@@ -13,6 +13,7 @@ from singulr.config import get_settings
 from singulr.models import Ban, IPSession, Profile
 from singulr.services.blockchain import ChainClient
 from singulr.services.channel_policy import (
+    DEFAULT_INSTANT_BAN_CATEGORIES,
     DEFAULT_NETWORK_AUTO_REJECT,
     EffectivePolicy,
     get_effective_channel_policy,
@@ -23,6 +24,7 @@ from singulr.services.network_reputation import (
     network_decision_from_score,
 )
 from singulr.services.reinstatement import is_ban_blocking
+from singulr.services.social_profile import get_social_profile_provider
 from singulr.services.stylometry import stylometry_similarity
 
 ENV_ANOMALY_RISK = 20
@@ -85,6 +87,7 @@ async def _resolve_effective_policy(
         network_registry_mode=settings.default_network_registry_mode,
         share_bans_to_network=False,
         network_auto_reject_categories=list(DEFAULT_NETWORK_AUTO_REJECT),
+        instant_ban_categories=list(DEFAULT_INSTANT_BAN_CATEGORIES),
         admin_ops_chat_id=settings.log_channel_id or None,
     )
 
@@ -183,10 +186,11 @@ async def check_known_bad(
         )
 
     if await chain.is_banned(fingerprint_hash):
+        factors.append("chain_blacklist")
         return MatchResult(
-            Decision.BLOCK,
-            "On-chain shared blacklist",
-            ["chain_blacklist"],
+            Decision.PENDING,
+            "Cross-channel network history requires review",
+            factors,
         )
 
     if effective_policy.network_registry_mode != "off":
@@ -211,8 +215,8 @@ async def check_known_bad(
             )
             if network_outcome == "block":
                 return MatchResult(
-                    Decision.BLOCK,
-                    "Network reputation reject",
+                    Decision.PENDING,
+                    "Network reputation review",
                     factors,
                 )
             if network_outcome == "pending":
@@ -292,6 +296,27 @@ async def check_known_bad(
         )
         if evasion is not None:
             return evasion
+
+    social = await get_social_profile_provider().analyze(telegram_user_id=telegram_user_id)
+    if social.hard_categories:
+        for category in social.hard_categories:
+            if category in effective_policy.instant_ban_categories:
+                factors.append(f"social_hard:{category}")
+                return MatchResult(
+                    Decision.BLOCK,
+                    f"Social profile — {category}",
+                    factors,
+                )
+    if social.soft_signals or social.risk_score >= 40:
+        for signal in social.soft_signals:
+            factors.append(f"social_soft:{signal}")
+        if social.risk_score:
+            factors.append(f"social_score:{social.risk_score}")
+        return MatchResult(
+            Decision.PENDING,
+            "Social profile review",
+            factors,
+        )
 
     if factors:
         return MatchResult(Decision.FLAG, "Elevated risk — review recommended", factors)
