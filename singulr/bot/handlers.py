@@ -7,8 +7,18 @@ import logging
 from telegram import Update
 from telegram.ext import Application, CallbackQueryHandler, ChatJoinRequestHandler, CommandHandler, ContextTypes, MessageHandler, filters
 
+from singulr.bot.ban_flow import (
+    PENDING_BAN_CATEGORY_KEY,
+    PENDING_BAN_USER_KEY,
+    category_keyboard,
+    parse_ban_category,
+    parse_ban_severity,
+    parse_ban_user_id,
+    severity_keyboard,
+)
 from singulr.config import get_settings
 from singulr.db import SessionLocal
+from singulr.domain.ban_taxonomy import BanCategory
 from singulr.models import MessageLog, StylometryProfile
 from singulr.services.bans import record_ban as persist_ban
 from singulr.services.stylometry import extract_features, merge_feature_vectors
@@ -191,8 +201,20 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         )
         if query.message:
             await query.message.reply_text(f"Denied user {user_id}")
-    elif data.startswith("ban_"):
-        user_id = int(data.removeprefix("ban_"))
+    elif data.startswith("ban_sev_"):
+        severity = parse_ban_severity(data)
+        user_id = context.user_data.pop(PENDING_BAN_USER_KEY, None)
+        category_value = context.user_data.pop(PENDING_BAN_CATEGORY_KEY, None)
+        if severity is None or user_id is None or category_value is None:
+            if query.message:
+                await query.message.reply_text("Ban flow expired — tap Ban again.")
+            return
+        try:
+            category = BanCategory(category_value)
+        except ValueError:
+            if query.message:
+                await query.message.reply_text("Invalid ban category — start again.")
+            return
         await ban_member(context.application, settings.channel_id, user_id)
         async with SessionLocal() as session:
             await persist_ban(
@@ -200,10 +222,33 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                 telegram_user_id=user_id,
                 channel_id=settings.channel_id,
                 reason="admin_ban",
+                category=category,
+                severity=severity,
             )
         await notify_user_result(context.application, user_id, approved=False)
         if query.message:
-            await query.message.reply_text(f"Banned user {user_id}")
+            await query.message.reply_text(
+                f"Banned user {user_id} ({category.value}/{severity.value})."
+            )
+    elif data.startswith("ban_cat_"):
+        category = parse_ban_category(data)
+        if category is None or PENDING_BAN_USER_KEY not in context.user_data:
+            if query.message:
+                await query.message.reply_text("Ban flow expired — tap Ban again.")
+            return
+        context.user_data[PENDING_BAN_CATEGORY_KEY] = category.value
+        if query.message:
+            await query.message.reply_text(
+                f"Ban user {context.user_data[PENDING_BAN_USER_KEY]} — choose severity:",
+                reply_markup=severity_keyboard(),
+            )
+    elif (user_id := parse_ban_user_id(data)) is not None:
+        context.user_data[PENDING_BAN_USER_KEY] = user_id
+        if query.message:
+            await query.message.reply_text(
+                f"Ban user {user_id} — choose category:",
+                reply_markup=category_keyboard(),
+            )
 
 
 async def run_watcher_job(context: ContextTypes.DEFAULT_TYPE) -> None:

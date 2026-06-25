@@ -371,7 +371,7 @@
         "Ban row after callback has correct category",
         "Watcher and log_to_channel still fire"
       ],
-      "passes": false
+      "passes": true
     },
     {
       "id": "7",

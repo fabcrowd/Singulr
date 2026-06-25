@@ -161,4 +161,26 @@
 
 - [2026-06-25 11:07 UTC] Completed req 14
 
-- [2026-06-25 11:08 UTC] Assigned req 6 to Cursor (NEXT_TASK)
+## Owner decisions (2026-06-25)
+
+- **Reverification:** Option A — clean reverification auto-approves and clears the flag; elevated risk stays pending.
+- **Build order:** Default autopilot sequence (req 6 → 7 → 8…).
+- **`ADMIN_TELEGRAM_ID`:** Owner will set in `.env` later; API path works via `ADMIN_API_KEY` meanwhile.
+- **Agent policy:** Categorize open questions under "Owner review" below; keep shipping unless `REPO_LEAD_BLOCKED`.
+
+## Owner review (flagged — non-blocking)
+
+| Category | Item | Agent assumption |
+|----------|------|------------------|
+| Config | `ADMIN_TELEGRAM_ID` unset | `/reverify` bot command disabled until env set; `POST /api/admin/reverify` works |
+- [2026-06-25] Completed req 6 — ban callback two-step flow (`ban_flow.py`, category → severity → `record_ban` with enums); tests/test_ban_callback.py.
+
+- [2026-06-25 11:40 UTC] Assigned req 6 to Cursor (NEXT_TASK)
+
+- [2026-06-25 11:41 UTC] Assigned req 6 to Cursor (NEXT_TASK)
+
+- [2026-06-25 11:41 UTC] Assigned req 6 to Cursor (NEXT_TASK)
+
+- [2026-06-25 11:41 UTC] Assigned req 6 to Cursor (NEXT_TASK)
+
+- [2026-06-25 11:41 UTC] Completed req 6
