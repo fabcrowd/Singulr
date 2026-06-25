@@ -47,3 +47,19 @@
 2026-06-25T15:06:14.2397107-04:00 [master fbba295] chore: sync local work 2026-06-25 15:06
 2026-06-25T15:06:14.2551830-04:00  1 file changed, 14 insertions(+)
 2026-06-25T15:06:14.2561863-04:00 PUSH: origin master
+2026-06-25T16:06:14.6201165-04:00 [master 3cda6e6] chore: sync local work 2026-06-25 16:06
+2026-06-25T16:06:14.6345286-04:00  35 files changed, 1748 insertions(+), 64 deletions(-)
+2026-06-25T16:06:14.6360409-04:00  create mode 100644 docs/autopilot/feature/feature-notes.md
+2026-06-25T16:06:14.6370568-04:00  create mode 100644 docs/autopilot/feature/feature.json
+2026-06-25T16:06:14.6380600-04:00  create mode 100644 docs/autopilot/feature/feature.md
+2026-06-25T16:06:14.6390637-04:00  create mode 100644 docs/plans/my-feature-brainstorm.md
+2026-06-25T16:06:14.6400672-04:00  create mode 100644 singulr/copy/__init__.py
+2026-06-25T16:06:14.6410708-04:00  create mode 100644 singulr/copy/member.py
+2026-06-25T16:06:14.6420739-04:00  create mode 100644 singulr/services/ban_history.py
+2026-06-25T16:06:14.6430776-04:00  create mode 100644 singulr/services/social_profile.py
+2026-06-25T16:06:14.6445797-04:00  create mode 100644 singulr/services/verify_ban.py
+2026-06-25T16:06:14.6460288-04:00  create mode 100644 tests/test_admin_reporting.py
+2026-06-25T16:06:14.6460288-04:00  create mode 100644 tests/test_member_verify_journey.py
+2026-06-25T16:06:14.6470549-04:00  create mode 100644 tests/test_social_profile.py
+2026-06-25T16:06:14.6490621-04:00  create mode 100644 tests/test_verify_ui.py
+2026-06-25T16:06:14.6495659-04:00 PUSH: origin master
