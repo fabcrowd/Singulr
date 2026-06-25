@@ -173,6 +173,8 @@
 | Category | Item | Agent assumption |
 |----------|------|------------------|
 | Config | `ADMIN_TELEGRAM_ID` unset | `/reverify` bot command disabled until env set; `POST /api/admin/reverify` works |
+| UX | Reverification strictness | Option A (auto-approve on clean re-verify) |
+
 - [2026-06-25] Completed req 6 — ban callback two-step flow (`ban_flow.py`, category → severity → `record_ban` with enums); tests/test_ban_callback.py.
 
 - [2026-06-25 11:40 UTC] Assigned req 6 to Cursor (NEXT_TASK)
