@@ -1,0 +1,5 @@
+2026-06-25T07:04:03.8725353-04:00 DRY-RUN: would sync the following:
+2026-06-25T07:04:03.8960005-04:00    M docs/autopilot/network-trust-registry/network-trust-registry-notes.md
+2026-06-25T07:04:03.8970037-04:00   ?? scripts/register-github-sync-task.ps1
+2026-06-25T07:04:03.8984669-04:00   ?? scripts/sync-to-github.ps1
+2026-06-25T07:04:03.8994720-04:00   ?? scripts/unregister-github-sync-task.ps1

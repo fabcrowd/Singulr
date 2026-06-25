@@ -23,7 +23,8 @@ from singulr.services.telegram_actions import (
     restrict_member,
     send_verification_dm,
 )
-from singulr.services.tokens import create_token
+from singulr.services.reverification import require_reverification
+from singulr.services.tokens import TokenRateLimitError, create_token
 from singulr.services.watcher import find_watcher_matches
 
 logger = logging.getLogger(__name__)

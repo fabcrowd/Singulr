@@ -42,6 +42,7 @@ class Settings(BaseSettings):
     default_network_registry_mode: str = "read"
 
     admin_api_key: str = ""
+    admin_telegram_id: int = 0
     admin_ops_chat_id: int = 0
     log_json: bool = False
     verify_rate_limit_per_minute: int = 30
