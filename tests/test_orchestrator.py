@@ -45,3 +45,46 @@ def test_structural_file_exists_check() -> None:
     """Parser detects missing test file."""
     result = check_structural_criterion("tests/nonexistent_file_xyz.py exists")
     assert not result.passed
+
+
+def test_structural_exists_in_prose_not_treated_as_file_path() -> None:
+    """Sentences ending in 'exists' are not misread as file-exists criteria."""
+    result = check_structural_criterion(
+        "get_effective_channel_policy(session, channel_id) returns defaults from config when no row exists"
+    )
+    assert result.passed
+
+
+def test_agent_runtime_defaults_to_cursor(tmp_path, monkeypatch) -> None:
+    """Missing runtime.json defaults to cursor."""
+    from orchestrator import runtime as rt
+
+    monkeypatch.setattr(rt, "RUNTIME_PATH", tmp_path / "missing.json")
+    assert rt.get_agent_runtime() == "cursor"
+    assert rt.runtime_label() == "Cursor"
+
+
+def test_agent_runtime_roundtrip(tmp_path, monkeypatch) -> None:
+    """set_agent_runtime persists and get_agent_runtime reads back."""
+    from orchestrator import runtime as rt
+
+    path = tmp_path / "runtime.json"
+    monkeypatch.setattr(rt, "RUNTIME_PATH", path)
+    rt.set_agent_runtime("claude-code")
+    assert rt.get_agent_runtime() == "claude-code"
+    assert rt.runtime_label() == "Claude Code"
+    rt.set_agent_runtime("cursor")
+    assert rt.get_agent_runtime() == "cursor"
+
+
+def test_agent_runtime_rejects_invalid(tmp_path, monkeypatch) -> None:
+    """Invalid runtime name raises ValueError."""
+    from orchestrator import runtime as rt
+
+    monkeypatch.setattr(rt, "RUNTIME_PATH", tmp_path / "runtime.json")
+    try:
+        rt.set_agent_runtime("vscode")
+    except ValueError as exc:
+        assert "claude-code" in str(exc)
+    else:
+        raise AssertionError("expected ValueError")

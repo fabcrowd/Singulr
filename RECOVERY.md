@@ -20,10 +20,21 @@ chkdsk D: /F
 
 File → Open Folder → `C:\Users\daroo\repos\Telegram bot`
 
-## Setup (first time on this machine)
+## Autopilot (Cursor — not Claude Code)
+
+Gens-ai task JSON runs via **Cursor Agent** + Conductor. Full guide: `docs/autopilot/CURSOR.md`.
+
+**Tonight:** `docs/autopilot/overnight-ops/LOOP_PROMPT.md` — paste into Agent before sleep.
 
 ```powershell
 cd "C:\Users\daroo\repos\Telegram bot"
+.\scripts\autopilot-cursor.ps1 status
+.\scripts\autopilot-cursor.ps1 next
+```
+
+Do **not** use `~/.local/bin/autopilot` (Claude Code CLI) for this repo.
+
+## Setup (first time)
 python -m venv .venv
 .\.venv\Scripts\pip install -e ".[dev]"
 npm install

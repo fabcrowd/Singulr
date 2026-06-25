@@ -14,6 +14,14 @@ FILE_EXISTS_RE = re.compile(
     r"^(.+?)\s+exists(?:\s+with\s+>=\s*(\d+)\s+test functions)?\.?$",
     re.IGNORECASE,
 )
+_PATH_SUFFIXES = (".py", ".md", ".json", ".sol", ".ps1", ".toml", ".txt", ".ini", ".ts", ".tsx", ".js")
+
+
+def _looks_like_file_path(text: str) -> bool:
+    """True when text resembles a repo-relative path, not prose containing 'exists'."""
+    if "/" in text or "\\" in text:
+        return True
+    return text.endswith(_PATH_SUFFIXES)
 PYTEST_PASSES_RE = re.compile(r"pytest\s+(.+?)\s+passes", re.IGNORECASE)
 
 
@@ -57,7 +65,7 @@ def check_structural_criterion(criterion: str) -> CheckResult:
     criterion = criterion.strip()
 
     m = FILE_EXISTS_RE.match(criterion)
-    if m:
+    if m and _looks_like_file_path(m.group(1).strip()):
         rel_path = m.group(1).replace("/", "\\") if "\\" in str(REPO_ROOT) else m.group(1)
         path = REPO_ROOT / rel_path.replace("\\", "/")
         if not path.exists():

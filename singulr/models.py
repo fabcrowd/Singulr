@@ -3,12 +3,13 @@
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import BigInteger, Boolean, DateTime, Integer, String, Text, func
+from sqlalchemy import BigInteger, Boolean, DateTime, Float, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.types import JSON
 
 from singulr.db import Base
+from singulr.domain.ban_taxonomy import BanCategory, BanSeverity
 
 
 class VerificationToken(Base):
@@ -50,6 +51,12 @@ class Ban(Base):
     stylometry_hash: Mapped[str | None] = mapped_column(String(66), nullable=True, index=True)
     ip_hash: Mapped[str | None] = mapped_column(String(66), nullable=True, index=True)
     reason: Mapped[str] = mapped_column(Text, default="")
+    category: Mapped[str] = mapped_column(
+        String(32), default=BanCategory.OTHER.value, server_default=BanCategory.OTHER.value
+    )
+    severity: Mapped[str] = mapped_column(
+        String(16), default=BanSeverity.MEDIUM.value, server_default=BanSeverity.MEDIUM.value
+    )
     banned_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     chain_tx: Mapped[str | None] = mapped_column(String(80), nullable=True)
 
@@ -89,3 +96,16 @@ class IPSession(Base):
     channel_id: Mapped[int] = mapped_column(BigInteger)
     action: Mapped[str] = mapped_column(String(32))
     timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class ChannelSecuritySettings(Base):
+    """Per-channel security policy configured via /security wizard or admin API."""
+
+    __tablename__ = "channel_security_settings"
+
+    channel_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    security_preset: Mapped[str] = mapped_column(String(16), default="balanced")
+    ban_evasion_auto_deny_threshold: Mapped[float | None] = mapped_column(Float, nullable=True)
+    local_similarity_flag_threshold: Mapped[float | None] = mapped_column(Float, nullable=True)
+    network_registry_mode: Mapped[str] = mapped_column(String(16), default="read")
+    admin_ops_chat_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)

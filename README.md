@@ -33,6 +33,8 @@ Set `FINGERPRINT_SECRET_KEY` only on the server if you add Pro Server API valida
 
 | Frontend | Single-page `/verify` |
 
+See [docs/DEPLOY.md](docs/DEPLOY.md) for production Docker Compose deployment.
+
 ## Quick start
 
 ### 1. Environment
@@ -73,6 +75,22 @@ npm run deploy:adiri
 ```bash
 uvicorn singulr.main:app --reload --host 0.0.0.0 --port 8000
 ```
+
+### Docker (production)
+
+Build and run without baking secrets into the image — pass env at runtime:
+
+```bash
+docker build -t singulr .
+docker run --rm -p 8000:8000 \
+  -e BOT_TOKEN=... \
+  -e CHANNEL_ID=... \
+  -e LOG_CHANNEL_ID=... \
+  -e PUBLIC_BASE_URL=http://localhost:8000 \
+  singulr
+```
+
+Health check: `curl http://localhost:8000/health`
 
 ### 6. Telegram setup
 
@@ -118,6 +136,22 @@ tests/
 - Store secrets only in `.env` (gitignored).
 - IP hashes are stored, never raw IPs.
 - Chain writes are optional until `CONTRACT_ADDRESS` + `WALLET_PRIVATE_KEY` are set.
+
+## Agent tooling (Cursor or Claude Code)
+
+This repo ships autopilot task JSON, PRDs, and a shared verify gate for **either** agent host.
+
+| Action | Command |
+|--------|---------|
+| Set runtime | `.\scripts\set-agent-runtime.ps1 cursor` or `claude-code` |
+| Hub doc | [docs/AGENT_RUNTIME.md](docs/AGENT_RUNTIME.md) |
+| Senior dev handoff | `.\scripts\start-repo-lead.ps1` |
+| Orchestrator | `python -m orchestrator autopilot use\|status\|next\|verify\|complete` |
+
+- **Cursor:** `.cursor/skills/`, [docs/autopilot/CURSOR-AUTOPILOT.md](docs/autopilot/CURSOR-AUTOPILOT.md)
+- **Claude Code:** [CLAUDE.md](CLAUDE.md), reinstall Gens-ai skills, [docs/autopilot/CLAUDE-CODE-AUTOPILOT.md](docs/autopilot/CLAUDE-CODE-AUTOPILOT.md)
+
+Default runtime in `.autopilot/runtime.json` is `cursor` (safe to commit; change per machine).
 
 ## Later phases (not in MVP)
 

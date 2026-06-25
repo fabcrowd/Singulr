@@ -36,6 +36,15 @@ class Settings(BaseSettings):
     watcher_interval_minutes: int = 60
     keystroke_similarity_threshold: float = 0.85
     stylometry_similarity_threshold: float = 0.80
+    ban_evasion_auto_deny_threshold: float = 0.92
+    local_similarity_flag_threshold: float = 0.85
+    default_security_preset: str = "balanced"
+    default_network_registry_mode: str = "read"
+
+    admin_api_key: str = ""
+    admin_ops_chat_id: int = 0
+    log_json: bool = False
+    verify_rate_limit_per_minute: int = 30
 
     @property
     def chain_enabled(self) -> bool:

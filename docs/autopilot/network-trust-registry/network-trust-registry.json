@@ -1,0 +1,849 @@
+{
+  "$schema": "https://raw.githubusercontent.com/Gens-ai/autopilot/main/tasks.schema.json",
+  "name": "network-trust-registry",
+  "description": "Cross-channel behavioral fingerprinting, on-chain trust registry, graduated ban-evasion decisions, admin ops workflow, and per-channel security Q&A wizard",
+  "goals": [
+    "Prevent ban evasion via device and behavioral fingerprint matching",
+    "Anchor verified fingerprints on a shared on-chain registry with category-weighted reputation",
+    "Auto-deny high-confidence evasion; pending admin review for uncertain risk only",
+    "Let channel admins configure security via private bot Q&A (/security)",
+    "Support hybrid reinstatement (local unban, decay, appeals)"
+  ],
+  "nonGoals": [
+    "End-user login, passwords, or email accounts",
+    "Web-based admin settings portal",
+    "reCAPTCHA or IPQualityScore",
+    "DAO governance for trusted channels",
+    "Raw message content on-chain",
+    "Live Telegram E2E automation"
+  ],
+  "technicalNotes": "Extend matching.py, models.py, handlers.py, blockchain.py \u2014 do not replace verify flow. Profile.status already exists. contracts/ is empty; deploy.js expects BanRegistry.sol. Phase order: local policy + ban evasion \u2192 ops + wizard \u2192 chain \u2192 network score \u2192 reinstatement.",
+  "_tdd": true,
+  "_priority_order": [
+    "1. Ban taxonomy + per-channel policy model",
+    "2. Dual-threshold matching + admin ops Telegram flow",
+    "3. Security wizard MVP",
+    "4. BanRegistry contract + ChainClient",
+    "5. Network score read/write + reinstatement"
+  ],
+  "_step_size": "One logical change per commit. Quality over speed.",
+  "requirements": [
+    {
+      "id": "1",
+      "category": "functional",
+      "description": "Add standardized ban category and severity enums; extend Ban model and record_ban() to persist them",
+      "codeAnalysis": {
+        "approach": "extend",
+        "existingFiles": [
+          "singulr/models.py",
+          "singulr/services/bans.py",
+          "tests/test_bans.py"
+        ],
+        "relatedTests": [
+          "tests/test_bans.py"
+        ],
+        "patterns": [
+          "SQLAlchemy Mapped columns on Ban",
+          "record_ban() loads Profile for fingerprint_hash"
+        ],
+        "targetFiles": {
+          "modify": [
+            "singulr/models.py",
+            "singulr/services/bans.py"
+          ],
+          "create": [
+            "singulr/domain/ban_taxonomy.py"
+          ]
+        }
+      },
+      "acceptance": [
+        "BanCategory enum includes spam, solicitation, scam_fraud, harassment, bot_abuse, impersonation, nsfw, raid_coordination, other",
+        "BanSeverity enum includes low, medium, high, permanent",
+        "Ban ORM has category and severity columns with sensible defaults for legacy rows",
+        "record_ban() accepts category and severity and persists them",
+        "pytest tests/test_ban_taxonomy.py passes"
+      ],
+      "tdd": {
+        "test": {
+          "description": "Add tests/test_ban_taxonomy.py: enum values, record_ban persists category/severity, migration/default for existing bans",
+          "file": "tests/test_ban_taxonomy.py",
+          "passes": false
+        },
+        "implement": {
+          "description": "Create singulr/domain/ban_taxonomy.py; add Ban.category and Ban.severity to models.py; extend record_ban() signature",
+          "passes": false
+        },
+        "refactor": {
+          "description": "Keep reason text as human note; ensure admin API list_bans returns category/severity",
+          "passes": false
+        }
+      },
+      "verification": [
+        "New ban row has non-null category and severity",
+        "test_bans.py still passes after updates"
+      ],
+      "passes": true
+    },
+    {
+      "id": "2",
+      "category": "functional",
+      "description": "Add ChannelSecuritySettings model and get_effective_channel_policy() loader with env fallbacks",
+      "dependsOn": [
+        "1"
+      ],
+      "codeAnalysis": {
+        "approach": "create",
+        "existingFiles": [
+          "singulr/models.py",
+          "singulr/config.py",
+          "singulr/services/matching.py"
+        ],
+        "relatedTests": [
+          "tests/test_matching.py"
+        ],
+        "patterns": [
+          "get_settings() for global defaults",
+          "channel_id on VerificationToken and IPSession"
+        ],
+        "targetFiles": {
+          "modify": [
+            "singulr/models.py",
+            "singulr/config.py"
+          ],
+          "create": [
+            "singulr/services/channel_policy.py",
+            "tests/test_channel_policy.py"
+          ]
+        }
+      },
+      "acceptance": [
+        "ChannelSecuritySettings table keyed by channel_id with preset, thresholds, network_registry_mode, admin_ops_chat_id",
+        "get_effective_channel_policy(session, channel_id) returns defaults from config when no row exists",
+        "Policy dataclass includes ban_evasion_auto_deny_threshold and local_similarity_flag_threshold",
+        "pytest tests/test_channel_policy.py passes"
+      ],
+      "tdd": {
+        "test": {
+          "description": "Add tests/test_channel_policy.py: defaults, persisted overrides, field types",
+          "file": "tests/test_channel_policy.py",
+          "passes": false
+        },
+        "implement": {
+          "description": "Add ChannelSecuritySettings to models.py; channel_policy.py with EffectivePolicy dataclass and loader",
+          "passes": false
+        },
+        "refactor": {
+          "description": "Add config defaults for ban_evasion_auto_deny_threshold (e.g. 0.92) separate from flag threshold",
+          "passes": false
+        }
+      },
+      "verification": [
+        "DB row overrides env for same channel_id",
+        "Missing row uses balanced preset defaults"
+      ],
+      "passes": true
+    },
+    {
+      "id": "3",
+      "category": "functional",
+      "description": "Implement dual-threshold ban evasion: high similarity to banned profile on new telegram_user_id \u2192 BLOCK; medium \u2192 PENDING",
+      "dependsOn": [
+        "2"
+      ],
+      "codeAnalysis": {
+        "approach": "modify",
+        "existingFiles": [
+          "singulr/services/matching.py",
+          "tests/test_matching.py"
+        ],
+        "relatedTests": [
+          "tests/test_matching.py"
+        ],
+        "patterns": [
+          "Decision enum APPROVE/FLAG/BLOCK",
+          "check_known_bad keystroke loop returns FLAG at >= keystroke_similarity_threshold"
+        ],
+        "targetFiles": {
+          "modify": [
+            "singulr/services/matching.py",
+            "tests/test_matching.py"
+          ],
+          "create": []
+        }
+      },
+      "acceptance": [
+        "Decision.PENDING exists (or FLAG documented as pending-only) for medium-confidence ban-evasion",
+        "New user_id with keystroke similarity >= ban_evasion_auto_deny_threshold against banned profile returns BLOCK",
+        "Similarity between flag and auto-deny thresholds against banned profile returns PENDING not BLOCK",
+        "check_known_bad accepts optional EffectivePolicy from channel_policy",
+        "pytest tests/test_matching.py includes high-confidence auto-deny and medium pending cases"
+      ],
+      "tdd": {
+        "test": {
+          "description": "Extend test_matching.py: seed banned profile on user A, verify user B with high vs medium keystroke similarity",
+          "file": "tests/test_matching.py",
+          "passes": false
+        },
+        "implement": {
+          "description": "Add Decision.PENDING; split similarity branches using policy thresholds; only treat as ban-evasion when matched_ban links to different telegram_user_id",
+          "passes": false
+        },
+        "refactor": {
+          "description": "Fix stylometry loop wrong matched_ban attribution noted in overnight-improve audit",
+          "passes": false
+        }
+      },
+      "verification": [
+        "High match \u2192 BLOCK with ban_evasion factor in risk_factors",
+        "Medium match \u2192 PENDING/FLAG without auto-ban path"
+      ],
+      "passes": true
+    },
+    {
+      "id": "4",
+      "category": "ui",
+      "description": "Admin ops Telegram workflow: separate ops chat, Permit/Deny for pending, audit-only message for auto-deny",
+      "dependsOn": [
+        "3"
+      ],
+      "codeAnalysis": {
+        "approach": "extend",
+        "existingFiles": [
+          "singulr/services/telegram_actions.py",
+          "singulr/bot/handlers.py",
+          "tests/test_log_format.py"
+        ],
+        "relatedTests": [
+          "tests/test_log_format.py"
+        ],
+        "patterns": [
+          "log_to_channel posts to log_channel_id",
+          "ELEVATED_RISK inline Approve/Ban keyboard",
+          "on_callback approve_/ban_ prefixes"
+        ],
+        "targetFiles": {
+          "modify": [
+            "singulr/services/telegram_actions.py",
+            "singulr/bot/handlers.py",
+            "singulr/config.py"
+          ],
+          "create": [
+            "tests/test_bot_ops_workflow.py"
+          ]
+        }
+      },
+      "acceptance": [
+        "log_to_ops_channel() posts to admin_ops_chat_id from channel policy or ADMIN_OPS_CHAT_ID env",
+        "Pending verification posts Permit and Deny callbacks (permit_/deny_ prefix)",
+        "Auto-deny BLOCK posts audit message without Permit button",
+        "Permit grants access and DMs user; Deny DMs denial reason",
+        "pytest tests/test_bot_ops_workflow.py passes with mocked Application"
+      ],
+      "tdd": {
+        "test": {
+          "description": "Add tests/test_bot_ops_workflow.py mocking telegram send_message and grant_access for pending and auto-deny paths",
+          "file": "tests/test_bot_ops_workflow.py",
+          "passes": false
+        },
+        "implement": {
+          "description": "Extend apply_verification_decision for pending vs block; add permit_/deny_ handlers; audit formatter for BAN_EVASION auto-deny",
+          "passes": false
+        },
+        "refactor": {
+          "description": "Reuse format helpers from test_log_format patterns",
+          "passes": false
+        }
+      },
+      "verification": [
+        "Pending path does not call ban_member until Deny",
+        "Auto-deny path calls ban_member and notify_user_result denied"
+      ],
+      "passes": true
+    },
+    {
+      "id": "5",
+      "category": "integration",
+      "description": "Wire verify API submit/precheck to PENDING decision and channel policy; log security_preset on decisions",
+      "dependsOn": [
+        "3",
+        "4"
+      ],
+      "codeAnalysis": {
+        "approach": "extend",
+        "existingFiles": [
+          "singulr/api/verify.py",
+          "tests/test_api_verify.py"
+        ],
+        "relatedTests": [
+          "tests/test_api_verify.py",
+          "tests/test_matching.py"
+        ],
+        "patterns": [
+          "_notify_bot maps flag\u2192flag, block\u2192block",
+          "token_row.channel_id available on submit"
+        ],
+        "targetFiles": {
+          "modify": [
+            "singulr/api/verify.py",
+            "tests/test_api_verify.py"
+          ],
+          "create": []
+        }
+      },
+      "acceptance": [
+        "submit calls check_known_bad with channel policy from token channel_id",
+        "PENDING/FLAG result returns decision pending to bot payload",
+        "BLOCK ban-evasion triggers auto-deny bot path not pending",
+        "Decision audit log includes security_preset when channel policy exists",
+        "pytest tests/test_api_verify.py covers pending and block mock _notify_bot payloads"
+      ],
+      "tdd": {
+        "test": {
+          "description": "Extend test_api_verify.py with mocked matching results for PENDING and BLOCK ban evasion",
+          "file": "tests/test_api_verify.py",
+          "passes": false
+        },
+        "implement": {
+          "description": "Load policy in verify submit/precheck; map Decision.PENDING to bot; pass policy_version in _notify_bot payload",
+          "passes": false
+        },
+        "refactor": {
+          "description": "Extract _decision_payload helper in verify.py if duplicated",
+          "passes": false
+        }
+      },
+      "verification": [
+        "API response decision field matches matching engine",
+        "_notify_bot called once per submit"
+      ],
+      "passes": true
+    },
+    {
+      "id": "6",
+      "category": "ui",
+      "description": "Ban inline callback requires category and severity selection before record_ban",
+      "dependsOn": [
+        "1"
+      ],
+      "codeAnalysis": {
+        "approach": "extend",
+        "existingFiles": [
+          "singulr/bot/handlers.py",
+          "singulr/services/bans.py"
+        ],
+        "relatedTests": [
+          "tests/test_bans.py"
+        ],
+        "patterns": [
+          "on_callback ban_ user_id calls persist_ban with reason admin_ban"
+        ],
+        "targetFiles": {
+          "modify": [
+            "singulr/bot/handlers.py"
+          ],
+          "create": [
+            "tests/test_ban_callback.py"
+          ]
+        }
+      },
+      "acceptance": [
+        "ban_ callback opens category picker inline keyboard",
+        "Second step selects severity then confirms",
+        "record_ban receives category and severity enums",
+        "pytest tests/test_ban_callback.py passes with mocked callback_query"
+      ],
+      "tdd": {
+        "test": {
+          "description": "Add tests/test_ban_callback.py for two-step callback data ban_cat_ ban_sev_ flow",
+          "file": "tests/test_ban_callback.py",
+          "passes": false
+        },
+        "implement": {
+          "description": "Multi-step callback handler storing pending ban user_id in context.user_data",
+          "passes": false
+        },
+        "refactor": {
+          "description": "Default category other/low when admin skips picker via quick-ban shortcut optional",
+          "passes": false
+        }
+      },
+      "verification": [
+        "Ban row after callback has correct category",
+        "Watcher and log_to_channel still fire"
+      ],
+      "passes": false
+    },
+    {
+      "id": "7",
+      "category": "ui",
+      "description": "Security setup wizard in private DM: /security, presets (open/balanced/strict), 4-5 core questions, persist ChannelSecuritySettings",
+      "dependsOn": [
+        "2"
+      ],
+      "codeAnalysis": {
+        "approach": "create",
+        "existingFiles": [
+          "singulr/bot/handlers.py",
+          "singulr/services/channel_policy.py"
+        ],
+        "relatedTests": [],
+        "patterns": [
+          "build_bot_application registers CommandHandler",
+          "No ConversationHandler yet \u2014 add state machine or python-telegram-bot ConversationHandler"
+        ],
+        "targetFiles": {
+          "modify": [
+            "singulr/bot/handlers.py",
+            "singulr/config.py"
+          ],
+          "create": [
+            "singulr/bot/security_wizard.py",
+            "tests/test_security_wizard.py"
+          ]
+        }
+      },
+      "acceptance": [
+        "/security starts wizard in private chat",
+        "Non-admin user cannot configure channel they do not administer (mock get_chat_member)",
+        "Wizard asks preset then ban-evasion strictness then ops chat link with inline A/B/C/D keyboards",
+        "Confirm persists ChannelSecuritySettings and replies summary",
+        "Re-running /security updates existing row",
+        "pytest tests/test_security_wizard.py passes"
+      ],
+      "tdd": {
+        "test": {
+          "description": "Add tests/test_security_wizard.py: state transitions, persist policy, admin gate",
+          "file": "tests/test_security_wizard.py",
+          "passes": false
+        },
+        "implement": {
+          "description": "Create security_wizard.py with ConversationHandler; map answers to preset bundles in channel_policy.py",
+          "passes": false
+        },
+        "refactor": {
+          "description": "Register wizard handlers in build_bot_application",
+          "passes": false
+        }
+      },
+      "verification": [
+        "wizard_completed_at set on confirm",
+        "Effective policy changes verify behavior in integration test"
+      ],
+      "passes": false
+    },
+    {
+      "id": "8",
+      "category": "integration",
+      "description": "Implement BanRegistry.sol with fingerprint register, structured ban records, isBanned, getReputation",
+      "dependsOn": [
+        "1"
+      ],
+      "codeAnalysis": {
+        "approach": "create",
+        "existingFiles": [
+          "hardhat.config.js",
+          "scripts/deploy.js",
+          "tests/test_blockchain.py"
+        ],
+        "relatedTests": [
+          "tests/test_blockchain.py"
+        ],
+        "patterns": [
+          "ChainClient.is_banned calls contract.functions.isBanned",
+          "contracts/ directory empty \u2014 create BanRegistry.sol per PRD data model"
+        ],
+        "targetFiles": {
+          "modify": [
+            "scripts/deploy.js"
+          ],
+          "create": [
+            "contracts/BanRegistry.sol",
+            "test/BanRegistry.test.js"
+          ]
+        }
+      },
+      "acceptance": [
+        "BanRegistry.sol supports registerFingerprint, recordBan with category and severity enums, overturnBan",
+        "getReputation returns score and active ban count",
+        "Hardhat test/BanRegistry.test.js passes via npm test",
+        "npm run compile succeeds"
+      ],
+      "tdd": {
+        "test": {
+          "description": "Add test/BanRegistry.test.js: register, ban, isBanned, getReputation, overturn",
+          "file": "test/BanRegistry.test.js",
+          "passes": false
+        },
+        "implement": {
+          "description": "Author contracts/BanRegistry.sol matching PRD BanRecord schema",
+          "passes": false
+        },
+        "refactor": {
+          "description": "Align deploy.js constructor args with contract",
+          "passes": false
+        }
+      },
+      "verification": [
+        "Contract artifacts generated under artifacts/",
+        "Category enum matches Python BanCategory ordinals or documented mapping"
+      ],
+      "passes": false
+    },
+    {
+      "id": "9",
+      "category": "integration",
+      "description": "Extend ChainClient: register_fingerprint, get_reputation, structured record_ban with category/severity",
+      "dependsOn": [
+        "8"
+      ],
+      "codeAnalysis": {
+        "approach": "extend",
+        "existingFiles": [
+          "singulr/services/blockchain.py",
+          "singulr/services/bans.py",
+          "tests/test_blockchain.py"
+        ],
+        "relatedTests": [
+          "tests/test_blockchain.py"
+        ],
+        "patterns": [
+          "ChainClient injectable _contract for tests",
+          "record_ban returns None when chain disabled"
+        ],
+        "targetFiles": {
+          "modify": [
+            "singulr/services/blockchain.py",
+            "singulr/services/bans.py",
+            "tests/test_blockchain.py"
+          ],
+          "create": []
+        }
+      },
+      "acceptance": [
+        "ChainClient.get_reputation(fingerprint_hash) returns dict with score and active_bans",
+        "record_ban passes category and severity to chain when enabled",
+        "register_fingerprint called on first profile approve",
+        "pytest tests/test_blockchain.py covers get_reputation mock contract",
+        "npm run compile && pytest tests/test_blockchain.py pass"
+      ],
+      "tdd": {
+        "test": {
+          "description": "Extend test_blockchain.py with MagicMock contract functions getReputation and recordBan",
+          "file": "tests/test_blockchain.py",
+          "passes": false
+        },
+        "implement": {
+          "description": "Wire web3 contract ABI from artifacts; implement async wrappers",
+          "passes": false
+        },
+        "refactor": {
+          "description": "Share category int mapping between ban_taxonomy and chain client",
+          "passes": false
+        }
+      },
+      "verification": [
+        "Disabled chain leaves DB-only path unchanged",
+        "Enabled chain stores chain_tx on Ban"
+      ],
+      "passes": false
+    },
+    {
+      "id": "10",
+      "category": "functional",
+      "description": "Network reputation scoring service integrated into check_known_bad with channel policy and category auto-reject",
+      "dependsOn": [
+        "2",
+        "9"
+      ],
+      "codeAnalysis": {
+        "approach": "create",
+        "existingFiles": [
+          "singulr/services/matching.py",
+          "singulr/services/blockchain.py"
+        ],
+        "relatedTests": [
+          "tests/test_matching.py"
+        ],
+        "patterns": [
+          "chain.is_banned already returns BLOCK",
+          "network_registry_mode off/read/read_write in ChannelSecuritySettings"
+        ],
+        "targetFiles": {
+          "modify": [
+            "singulr/services/matching.py"
+          ],
+          "create": [
+            "singulr/services/network_reputation.py",
+            "tests/test_network_reputation.py"
+          ]
+        }
+      },
+      "acceptance": [
+        "compute_network_score(active_bans, policy) weights by category severity",
+        "scam_fraud permanent active ban causes BLOCK when network_registry_mode is read",
+        "Score between review_min and reject_min yields PENDING",
+        "Score above reject_min yields BLOCK",
+        "network_registry_mode off skips chain reputation fetch",
+        "pytest tests/test_network_reputation.py and extended test_matching.py pass"
+      ],
+      "tdd": {
+        "test": {
+          "description": "Add tests/test_network_reputation.py for score bands; extend test_matching.py with mocked get_reputation",
+          "file": "tests/test_network_reputation.py",
+          "passes": false
+        },
+        "implement": {
+          "description": "network_reputation.py; integrate into check_known_bad after local similarity checks",
+          "passes": false
+        },
+        "refactor": {
+          "description": "Honor fail_closed_on_chain_error \u2192 PENDING when RPC fails",
+          "passes": false
+        }
+      },
+      "verification": [
+        "network_auto_reject_categories respected",
+        "Decision audit includes network_score factor"
+      ],
+      "passes": false
+    },
+    {
+      "id": "11",
+      "category": "integration",
+      "description": "Network ban write path: share_bans_to_network, trusted channel list, zero weight for untrusted opt-in",
+      "dependsOn": [
+        "9",
+        "10"
+      ],
+      "codeAnalysis": {
+        "approach": "extend",
+        "existingFiles": [
+          "singulr/services/bans.py",
+          "singulr/services/channel_policy.py",
+          "singulr/config.py"
+        ],
+        "relatedTests": [
+          "tests/test_bans.py"
+        ],
+        "patterns": [
+          "record_ban already calls _chain.record_ban"
+        ],
+        "targetFiles": {
+          "modify": [
+            "singulr/services/bans.py",
+            "singulr/config.py",
+            "singulr/services/network_reputation.py"
+          ],
+          "create": [
+            "tests/test_network_write.py"
+          ]
+        }
+      },
+      "acceptance": [
+        "TRUSTED_CHANNEL_IDS env or config list gates score contribution",
+        "share_bans_to_network false skips chain write",
+        "Untrusted opt-in channel ban logged locally with network_weight=0",
+        "Trusted channel ban writes to chain with category/severity",
+        "pytest tests/test_network_write.py passes"
+      ],
+      "tdd": {
+        "test": {
+          "description": "Add tests/test_network_write.py for trusted vs untrusted write behavior",
+          "file": "tests/test_network_write.py",
+          "passes": false
+        },
+        "implement": {
+          "description": "should_contribute_to_network(channel_id, policy) guard in record_ban",
+          "passes": false
+        },
+        "refactor": {
+          "description": "Log NetworkBanEvent row optional for audit",
+          "passes": false
+        }
+      },
+      "verification": [
+        "read_write mode required for chain write",
+        "Local ban always persisted"
+      ],
+      "passes": false
+    },
+    {
+      "id": "12",
+      "category": "ui",
+      "description": "Extend security wizard with network registry mode and auto-reject category multi-select",
+      "dependsOn": [
+        "7",
+        "10"
+      ],
+      "codeAnalysis": {
+        "approach": "extend",
+        "existingFiles": [
+          "singulr/bot/security_wizard.py",
+          "singulr/services/channel_policy.py"
+        ],
+        "relatedTests": [
+          "tests/test_security_wizard.py"
+        ],
+        "patterns": [
+          "Phase 1 wizard core questions",
+          "PRD F8.2 network registry row"
+        ],
+        "targetFiles": {
+          "modify": [
+            "singulr/bot/security_wizard.py",
+            "tests/test_security_wizard.py"
+          ],
+          "create": []
+        }
+      },
+      "acceptance": [
+        "Wizard asks network registry off/read/read_write",
+        "Wizard asks which categories auto-reject from network (multi-select)",
+        "Answers persist network_registry_mode and network_auto_reject_categories",
+        "wizard_version bumped to 2",
+        "pytest tests/test_security_wizard.py covers new steps"
+      ],
+      "tdd": {
+        "test": {
+          "description": "Extend test_security_wizard.py for network steps and persisted JSON categories list",
+          "file": "tests/test_security_wizard.py",
+          "passes": false
+        },
+        "implement": {
+          "description": "Add wizard states; map read_write to share_bans_to_network true",
+          "passes": false
+        },
+        "refactor": {
+          "description": "Delta prompt when wizard_version < 2 on /security",
+          "passes": false
+        }
+      },
+      "verification": [
+        "Summary shows network mode and categories",
+        "Verify uses updated policy without restart"
+      ],
+      "passes": false
+    },
+    {
+      "id": "13",
+      "category": "functional",
+      "description": "Hybrid reinstatement: local unban with overturn event, time decay for low/medium categories, appeal record stub",
+      "dependsOn": [
+        "9",
+        "11"
+      ],
+      "codeAnalysis": {
+        "approach": "create",
+        "existingFiles": [
+          "singulr/services/bans.py",
+          "singulr/api/admin.py"
+        ],
+        "relatedTests": [
+          "tests/test_bans.py",
+          "tests/test_admin_api.py"
+        ],
+        "patterns": [
+          "Ban.chain_tx stored",
+          "No unban endpoint yet"
+        ],
+        "targetFiles": {
+          "modify": [
+            "singulr/services/bans.py",
+            "singulr/api/admin.py"
+          ],
+          "create": [
+            "singulr/services/reinstatement.py",
+            "tests/test_reinstatement.py"
+          ]
+        }
+      },
+      "acceptance": [
+        "local_unban() marks ban overturned and calls chain overturnBan when chain_tx present",
+        "apply_decay() reduces score contribution for low/medium bans older than configured months",
+        "permanent categories skip automatic decay",
+        "AppealRecord model stores pending appeals",
+        "POST /api/admin/appeals or documented bot command creates appeal",
+        "pytest tests/test_reinstatement.py passes"
+      ],
+      "tdd": {
+        "test": {
+          "description": "Add tests/test_reinstatement.py: unban recalculates eligibility, decay math, permanent no decay",
+          "file": "tests/test_reinstatement.py",
+          "passes": false
+        },
+        "implement": {
+          "description": "reinstatement.py; extend admin API with unban/appeal endpoints behind require_admin_key",
+          "passes": false
+        },
+        "refactor": {
+          "description": "DM template for successful reinstatement",
+          "passes": false
+        }
+      },
+      "verification": [
+        "User with overturned ban can verify APPROVE when score below threshold",
+        "History retained; ban row not deleted"
+      ],
+      "passes": false
+    },
+    {
+      "id": "14",
+      "category": "functional",
+      "description": "Admin-triggered reverification: flag profile reverification_required and force new verify token on join",
+      "dependsOn": [
+        "5"
+      ],
+      "codeAnalysis": {
+        "approach": "extend",
+        "existingFiles": [
+          "singulr/bot/handlers.py",
+          "singulr/models.py",
+          "singulr/services/tokens.py"
+        ],
+        "relatedTests": [
+          "tests/test_tokens.py"
+        ],
+        "patterns": [
+          "Profile.status column exists",
+          "on_join_request create_token then DM verify link"
+        ],
+        "targetFiles": {
+          "modify": [
+            "singulr/bot/handlers.py",
+            "singulr/api/admin.py"
+          ],
+          "create": [
+            "tests/test_reverification.py"
+          ]
+        }
+      },
+      "acceptance": [
+        "/reverify <user_id> admin command sets profile status reverification_required",
+        "on_join_request for that user sends new verify link without granting access",
+        "submit blocked or forced pending until reverification completes",
+        "Admin API POST /api/admin/reverify with X-Admin-Key",
+        "pytest tests/test_reverification.py passes"
+      ],
+      "tdd": {
+        "test": {
+          "description": "Add tests/test_reverification.py for status flag and join handler behavior",
+          "file": "tests/test_reverification.py",
+          "passes": false
+        },
+        "implement": {
+          "description": "CommandHandler reverify; admin endpoint; check status in verify submit",
+          "passes": false
+        },
+        "refactor": {
+          "description": "Catch TokenRateLimitError in on_join_request with user DM",
+          "passes": false
+        }
+      },
+      "verification": [
+        "After successful re-verify status returns approved",
+        "Non-admin cannot run /reverify"
+      ],
+      "passes": false
+    }
+  ]
+}

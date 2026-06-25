@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from singulr.config import get_settings
 from singulr.models import Ban, IPSession, Profile
 from singulr.services.blockchain import ChainClient
+from singulr.services.channel_policy import EffectivePolicy, get_effective_channel_policy
 from singulr.services.keystroke import keystroke_similarity
 from singulr.services.stylometry import stylometry_similarity
 
@@ -23,6 +24,7 @@ class Decision(str, Enum):
 
     APPROVE = "approve"
     FLAG = "flag"
+    PENDING = "pending"
     BLOCK = "block"
 
 
@@ -43,6 +45,71 @@ def _env_anomaly_detected(env_flags: dict | None) -> bool:
     if not env_flags:
         return False
     return bool(env_flags.get("webdriver") or env_flags.get("headless_ua"))
+
+
+def _is_ban_evasion_match(ban: Ban | None, telegram_user_id: int) -> bool:
+    """True when similarity links a new user to a banned identity."""
+    if ban is None:
+        return False
+    if ban.telegram_user_id is None:
+        return True
+    return ban.telegram_user_id != telegram_user_id
+
+
+async def _resolve_effective_policy(
+    session: AsyncSession,
+    *,
+    channel_id: int | None,
+    policy: EffectivePolicy | None,
+) -> EffectivePolicy:
+    """Load channel policy or build defaults from settings."""
+    if policy is not None:
+        return policy
+    if channel_id is not None:
+        return await get_effective_channel_policy(session, channel_id)
+    settings = get_settings()
+    return EffectivePolicy(
+        channel_id=channel_id or 0,
+        security_preset=settings.default_security_preset,
+        ban_evasion_auto_deny_threshold=settings.ban_evasion_auto_deny_threshold,
+        local_similarity_flag_threshold=settings.local_similarity_flag_threshold,
+        network_registry_mode=settings.default_network_registry_mode,
+        admin_ops_chat_id=settings.log_channel_id or None,
+    )
+
+
+def _ban_evasion_result(
+    *,
+    score: float,
+    score_label: str,
+    matched_ban: Ban | None,
+    policy: EffectivePolicy,
+    factors: list[str],
+    keystroke_score: float | None = None,
+    stylometry_score: float | None = None,
+) -> MatchResult | None:
+    """Map similarity score to BLOCK or PENDING for ban-evasion cases."""
+    if score >= policy.ban_evasion_auto_deny_threshold:
+        factors.append(f"{score_label}:{score:.2f}")
+        return MatchResult(
+            Decision.BLOCK,
+            f"Ban evasion — high {score_label.replace('_', ' ')}",
+            factors,
+            matched_ban_id=matched_ban.id if matched_ban else None,
+            keystroke_score=keystroke_score,
+            stylometry_score=stylometry_score,
+        )
+    if score >= policy.local_similarity_flag_threshold:
+        factors.append(f"{score_label}:{score:.2f}")
+        return MatchResult(
+            Decision.PENDING,
+            f"Possible ban evasion — {score_label.replace('_', ' ')}",
+            factors,
+            matched_ban_id=matched_ban.id if matched_ban else None,
+            keystroke_score=keystroke_score,
+            stylometry_score=stylometry_score,
+        )
+    return None
 
 
 async def check_ip_velocity(session: AsyncSession, ip_hash: str) -> bool:
@@ -67,9 +134,13 @@ async def check_known_bad(
     keystroke_profile: dict | None = None,
     stylometry_vector: dict | None = None,
     env_flags: dict | None = None,
+    channel_id: int | None = None,
+    policy: EffectivePolicy | None = None,
 ) -> MatchResult:
     """Run tiered checks: exact bans, chain, IP flag, env anomaly, keystroke/stylometry."""
-    settings = get_settings()
+    effective_policy = await _resolve_effective_policy(
+        session, channel_id=channel_id, policy=policy
+    )
     factors: list[str] = []
 
     ban_by_user = await session.scalar(
@@ -112,7 +183,8 @@ async def check_known_bad(
     bans = (await session.scalars(select(Ban))).all()
     best_keystroke = 0.0
     best_stylo = 0.0
-    matched_ban: Ban | None = None
+    keystroke_matched_ban: Ban | None = None
+    stylo_matched_ban: Ban | None = None
 
     if keystroke_profile:
         for ban in bans:
@@ -125,43 +197,45 @@ async def check_known_bad(
                 score = keystroke_similarity(keystroke_profile, profile.keystroke_profile)
                 if score > best_keystroke:
                     best_keystroke = score
-                    matched_ban = ban
+                    keystroke_matched_ban = ban
 
     if stylometry_vector and bans:
         from singulr.models import StylometryProfile
 
         for ban in bans:
-            if not ban.stylometry_hash:
+            if not ban.stylometry_hash or not ban.telegram_user_id:
                 continue
-            stylo_rows = (await session.scalars(select(StylometryProfile))).all()
-            for row in stylo_rows:
-                if row.telegram_user_id and any(
-                    b.telegram_user_id == row.telegram_user_id for b in bans if b.telegram_user_id
-                ):
-                    score = stylometry_similarity(stylometry_vector, row.feature_vector)
-                    if score > best_stylo:
-                        best_stylo = score
-                        matched_ban = ban
+            row = await session.get(StylometryProfile, ban.telegram_user_id)
+            if not row or not row.feature_vector:
+                continue
+            score = stylometry_similarity(stylometry_vector, row.feature_vector)
+            if score > best_stylo:
+                best_stylo = score
+                stylo_matched_ban = ban
 
-    if best_keystroke >= settings.keystroke_similarity_threshold:
-        factors.append(f"keystroke_similarity:{best_keystroke:.2f}")
-        return MatchResult(
-            Decision.FLAG,
-            "Probable keystroke match to banned profile",
-            factors,
-            matched_ban_id=matched_ban.id if matched_ban else None,
+    if keystroke_profile and _is_ban_evasion_match(keystroke_matched_ban, telegram_user_id):
+        evasion = _ban_evasion_result(
+            score=best_keystroke,
+            score_label="keystroke_similarity",
+            matched_ban=keystroke_matched_ban,
+            policy=effective_policy,
+            factors=factors.copy(),
             keystroke_score=best_keystroke,
         )
+        if evasion is not None:
+            return evasion
 
-    if best_stylo >= settings.stylometry_similarity_threshold:
-        factors.append(f"stylometry_similarity:{best_stylo:.2f}")
-        return MatchResult(
-            Decision.FLAG,
-            "Probable writing-style match to banned profile",
-            factors,
-            matched_ban_id=matched_ban.id if matched_ban else None,
+    if stylometry_vector and _is_ban_evasion_match(stylo_matched_ban, telegram_user_id):
+        evasion = _ban_evasion_result(
+            score=best_stylo,
+            score_label="stylometry_similarity",
+            matched_ban=stylo_matched_ban,
+            policy=effective_policy,
+            factors=factors.copy(),
             stylometry_score=best_stylo,
         )
+        if evasion is not None:
+            return evasion
 
     if factors:
         return MatchResult(Decision.FLAG, "Elevated risk — review recommended", factors)

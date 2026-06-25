@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from singulr.config import VERIFICATION_SENTENCE
 from singulr.models import Ban
 from singulr.services.hashing import hash_fingerprint
+from singulr.services.matching import Decision, MatchResult
 from singulr.services.tokens import create_token
 
 _SAMPLE_KEYSTROKES = [
@@ -185,3 +186,73 @@ async def test_submit_flags_env_anomaly_when_webdriver(
     assert body["decision"] == "flag"
     assert any("env_anomaly" in factor for factor in body["risk_factors"])
     mock_notify.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+@patch("singulr.api.verify.check_known_bad", new_callable=AsyncMock)
+@patch("singulr.api.verify._notify_bot", new_callable=AsyncMock)
+async def test_submit_returns_pending_with_channel_policy(
+    mock_notify: AsyncMock,
+    mock_check: AsyncMock,
+    api_client: httpx.AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """Submit maps PENDING matching result to pending bot payload with security_preset."""
+    mock_check.return_value = MatchResult(
+        Decision.PENDING,
+        "Possible ban evasion — keystroke_similarity",
+        ["keystroke_similarity:0.87"],
+        matched_ban_id=5,
+    )
+    token = await create_token(db_session, telegram_user_id=900, channel_id=42)
+
+    response = await api_client.post(
+        "/api/verify/submit",
+        json=_submit_body(token),
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["decision"] == "pending"
+    assert body["security_preset"] == "balanced"
+    mock_check.assert_awaited_once()
+    assert mock_check.await_args.kwargs["channel_id"] == 42
+    assert mock_check.await_args.kwargs["policy"].security_preset == "balanced"
+    mock_notify.assert_awaited_once()
+    notify_payload = mock_notify.await_args.args[0]
+    assert notify_payload["decision"] == "pending"
+    assert notify_payload["security_preset"] == "balanced"
+    assert notify_payload["matched_ban_id"] == 5
+
+
+@pytest.mark.asyncio
+@patch("singulr.api.verify.check_known_bad", new_callable=AsyncMock)
+@patch("singulr.api.verify._notify_bot", new_callable=AsyncMock)
+async def test_submit_block_ban_evasion_auto_deny_not_pending(
+    mock_notify: AsyncMock,
+    mock_check: AsyncMock,
+    api_client: httpx.AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """Submit maps BLOCK ban-evasion to block bot payload, not pending."""
+    mock_check.return_value = MatchResult(
+        Decision.BLOCK,
+        "Ban evasion — high keystroke similarity",
+        ["keystroke_similarity:0.95"],
+        matched_ban_id=3,
+    )
+    token = await create_token(db_session, telegram_user_id=901, channel_id=42)
+
+    response = await api_client.post(
+        "/api/verify/submit",
+        json=_submit_body(token),
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["decision"] == "block"
+    assert body["decision"] != "pending"
+    mock_notify.assert_awaited_once()
+    notify_payload = mock_notify.await_args.args[0]
+    assert notify_payload["decision"] == "block"
+    assert notify_payload["security_preset"] == "balanced"

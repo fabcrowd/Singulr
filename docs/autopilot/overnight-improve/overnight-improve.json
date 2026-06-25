@@ -1,0 +1,210 @@
+{
+  "$schema": "https://raw.githubusercontent.com/Gens-ai/autopilot/main/tasks.schema.json",
+  "name": "overnight-improve",
+  "description": "Research dossier, bug hunt, test expansion, security hardening, ship report",
+  "goals": [
+    "Research and document improvement targets",
+    "Fix critical bugs found in audit",
+    "Expand bot and watcher test coverage",
+    "Harden verify and admin security paths",
+    "Ship with full verify suite green"
+  ],
+  "nonGoals": [
+    "reCAPTCHA or IPQualityScore",
+    "Admin web UI",
+    "Live Telegram E2E automation",
+    "Phase 2 feature work"
+  ],
+  "_tdd": true,
+  "requirements": [
+    {
+      "id": "1",
+      "category": "research",
+      "priority": "high",
+      "description": "Produce research dossier using parallel explore subagents: architecture, untested modules, top 5 improvements",
+      "acceptance": [
+        "docs/autopilot/overnight-improve/research.md exists",
+        "research.md documents >= 5 improvement candidates",
+        "tests/test_overnight_research.py passes"
+      ],
+      "tdd": {
+        "test": {
+          "description": "Add tests/test_overnight_research.py asserting research.md structure and candidate count",
+          "passes": false
+        },
+        "implement": {
+          "description": "Launch parallel explore subagents; consolidate into research.md",
+          "passes": false
+        },
+        "refactor": {
+          "passes": false
+        }
+      },
+      "passes": true
+    },
+    {
+      "id": "2",
+      "category": "research",
+      "priority": "high",
+      "description": "Deep bug hunt on recent commits; document findings and fix any critical issues with tests",
+      "dependsOn": [
+        "1"
+      ],
+      "acceptance": [
+        "docs/autopilot/overnight-improve/audit.md exists",
+        "pytest tests/test_overnight_research.py passes"
+      ],
+      "tdd": {
+        "test": {
+          "description": "Extend test_overnight_research.py to assert audit.md has severity sections",
+          "passes": false
+        },
+        "implement": {
+          "description": "Run deep-bug-hunt skill; write audit.md; minimal fixes with tests if critical",
+          "passes": false
+        },
+        "refactor": {
+          "passes": false
+        }
+      },
+      "passes": true
+    },
+    {
+      "id": "3",
+      "category": "test",
+      "priority": "high",
+      "description": "Add unit tests for singulr/bot/handlers.py join and verification decision paths",
+      "dependsOn": [
+        "1"
+      ],
+      "acceptance": [
+        "tests/test_bot_handlers.py exists with >= 3 test functions",
+        "pytest tests/test_bot_handlers.py passes"
+      ],
+      "tdd": {
+        "test": {
+          "description": "Add tests/test_bot_handlers.py with mocked telegram Application",
+          "passes": false
+        },
+        "implement": {
+          "description": "Implement tests using telegram-bot-architect patterns; fix handler edge cases if found",
+          "passes": false
+        },
+        "refactor": {
+          "passes": false
+        }
+      },
+      "passes": false
+    },
+    {
+      "id": "4",
+      "category": "test",
+      "priority": "medium",
+      "description": "Expand watcher and stylometry tests for flag path and empty-channel edge cases",
+      "acceptance": [
+        "tests/test_watcher.py exists with >= 3 test functions",
+        "pytest tests/test_watcher.py passes"
+      ],
+      "tdd": {
+        "test": {
+          "description": "Extend tests/test_watcher.py with additional scenarios",
+          "passes": false
+        },
+        "implement": {
+          "description": "Minimal watcher/stylometry fixes if tests expose bugs",
+          "passes": false
+        },
+        "refactor": {
+          "passes": false
+        }
+      },
+      "passes": false
+    },
+    {
+      "id": "5",
+      "category": "security",
+      "priority": "high",
+      "description": "Harden verify rate limit on submit and JSON access logging; security-review any changes",
+      "dependsOn": [
+        "2"
+      ],
+      "acceptance": [
+        "tests/test_verify_rate_limit.py exists with >= 2 test functions",
+        "pytest tests/test_verify_rate_limit.py passes",
+        "tests/test_request_logging.py passes"
+      ],
+      "tdd": {
+        "test": {
+          "description": "Add submit 429 test and LOG_JSON caplog test to rate_limit and request_logging tests",
+          "passes": false
+        },
+        "implement": {
+          "description": "Fix gaps found; run security-review subagent on diff",
+          "passes": false
+        },
+        "refactor": {
+          "passes": false
+        }
+      },
+      "passes": false
+    },
+    {
+      "id": "6",
+      "category": "improve",
+      "priority": "medium",
+      "description": "Implement top research backlog item (highest severity, smallest diff) with TDD",
+      "dependsOn": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5"
+      ],
+      "acceptance": [
+        "docs/autopilot/overnight-improve/improvement-log.md exists",
+        "pytest tests/test_overnight_research.py passes"
+      ],
+      "tdd": {
+        "test": {
+          "description": "Add test for chosen improvement in appropriate test module",
+          "passes": false
+        },
+        "implement": {
+          "description": "Pick item from research.md; red-green-refactor; log in improvement-log.md",
+          "passes": false
+        },
+        "refactor": {
+          "passes": false
+        }
+      },
+      "passes": false
+    },
+    {
+      "id": "7",
+      "category": "ship",
+      "priority": "medium",
+      "description": "Final report, lessons update, and full verify suite",
+      "dependsOn": [
+        "6"
+      ],
+      "acceptance": [
+        "docs/autopilot/overnight-improve/IMPROVE_REPORT.md exists",
+        "tests/test_overnight_research.py passes"
+      ],
+      "tdd": {
+        "test": {
+          "description": "Add test asserting IMPROVE_REPORT.md mentions verify.ps1 and requirement count",
+          "passes": false
+        },
+        "implement": {
+          "description": "Write IMPROVE_REPORT.md; update tasks/lessons.md if fixes landed",
+          "passes": false
+        },
+        "refactor": {
+          "passes": false
+        }
+      },
+      "passes": false
+    }
+  ]
+}

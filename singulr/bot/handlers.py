@@ -17,6 +17,8 @@ from singulr.services.telegram_actions import (
     get_channel_title,
     grant_access,
     log_to_channel,
+    log_to_ops_channel,
+    notify_user_denied,
     notify_user_result,
     restrict_member,
     send_verification_dm,
@@ -25,6 +27,15 @@ from singulr.services.tokens import create_token
 from singulr.services.watcher import find_watcher_matches
 
 logger = logging.getLogger(__name__)
+
+
+def _parse_channel_user_callback(payload: str) -> tuple[int, int]:
+    """Parse `{channel_id}_{user_id}` callback payloads."""
+    settings = get_settings()
+    if "_" in payload:
+        channel_part, user_part = payload.rsplit("_", 1)
+        return int(channel_part), int(user_part)
+    return settings.channel_id, int(payload)
 
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -117,6 +128,22 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         await notify_user_result(context.application, user_id, approved=True)
         if query.message:
             await query.message.reply_text(f"Approved user {user_id}")
+    elif data.startswith("permit_"):
+        channel_id, user_id = _parse_channel_user_callback(data.removeprefix("permit_"))
+        await grant_access(context.application, channel_id, user_id)
+        await notify_user_result(context.application, user_id, approved=True)
+        if query.message:
+            await query.message.reply_text(f"Permitted user {user_id}")
+    elif data.startswith("deny_"):
+        channel_id, user_id = _parse_channel_user_callback(data.removeprefix("deny_"))
+        await ban_member(context.application, channel_id, user_id)
+        await notify_user_denied(
+            context.application,
+            user_id,
+            "Admin review denied your verification.",
+        )
+        if query.message:
+            await query.message.reply_text(f"Denied user {user_id}")
     elif data.startswith("ban_"):
         user_id = int(data.removeprefix("ban_"))
         await ban_member(context.application, settings.channel_id, user_id)
@@ -181,6 +208,8 @@ async def apply_verification_decision(
     reason: str = "",
     risk_factors: list[str] | None = None,
     fingerprint_hash: str | None = None,
+    admin_ops_chat_id: int | None = None,
+    matched_ban_id: int | None = None,
 ) -> None:
     """Execute bot action after verification API returns."""
     if decision == "approve":
@@ -200,14 +229,27 @@ async def apply_verification_decision(
             risk_factors=risk_factors,
         )
         await notify_user_result(app, telegram_user_id, approved=False, held=True)
+    elif decision == "pending":
+        await log_to_ops_channel(
+            app,
+            "PENDING_REVIEW",
+            channel_id=channel_id,
+            admin_ops_chat_id=admin_ops_chat_id,
+            user_id=telegram_user_id,
+            reason=reason,
+            risk_factors=risk_factors,
+            matched_ban_id=matched_ban_id,
+        )
+        await notify_user_result(app, telegram_user_id, approved=False, held=True)
     else:
         await ban_member(app, channel_id, telegram_user_id)
         await notify_user_result(app, telegram_user_id, approved=False)
-        event_type = "BAN_EVASION" if "fingerprint" in reason.lower() else "BLOCKED"
-        await log_to_channel(
+        event_type = "BAN_EVASION" if "evasion" in reason.lower() else "BLOCKED"
+        await log_to_ops_channel(
             app,
             event_type,
-            body=f"User ID: {telegram_user_id}\nReason: {reason}" if event_type == "BLOCKED" else None,
+            channel_id=channel_id,
+            admin_ops_chat_id=admin_ops_chat_id,
             user_id=telegram_user_id,
             reason=reason,
             fingerprint_hash=fingerprint_hash,

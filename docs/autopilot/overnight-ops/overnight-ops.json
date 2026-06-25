@@ -1,0 +1,178 @@
+{
+  "$schema": "https://raw.githubusercontent.com/Gens-ai/autopilot/main/tasks.schema.json",
+  "name": "overnight-ops",
+  "description": "Deploy stack, logging, verify rate limits, admin bans API, health metadata, deploy runbook",
+  "goals": [
+    "Runnable production docker compose profile",
+    "Structured observability on the API",
+    "Verify endpoint abuse protection",
+    "Read-only admin bans API",
+    "Deploy documentation"
+  ],
+  "nonGoals": [
+    "reCAPTCHA",
+    "Admin web UI",
+    "Live Telegram E2E"
+  ],
+  "_tdd": true,
+  "requirements": [
+    {
+      "id": "1",
+      "category": "infrastructure",
+      "priority": "high",
+      "description": "Add docker-compose.prod.yml with app service (build Dockerfile) and postgres, wired to existing db service pattern",
+      "acceptance": [
+        "docker-compose.prod.yml exists",
+        "Defines app service building from Dockerfile on port 8000",
+        "Uses DATABASE_URL pointing at postgres service",
+        "tests/test_compose_prod.py asserts file structure"
+      ],
+      "tdd": {
+        "test": {
+          "description": "Add tests/test_compose_prod.py checking compose prod file references app, db, and port 8000",
+          "passes": false
+        },
+        "implement": {
+          "description": "Create docker-compose.prod.yml extending base compose with app service and env_file pattern",
+          "passes": false
+        },
+        "refactor": {
+          "passes": false
+        }
+      },
+      "passes": true
+    },
+    {
+      "id": "2",
+      "category": "observability",
+      "priority": "high",
+      "description": "Add request ID middleware and optional JSON logging when LOG_JSON=true",
+      "acceptance": [
+        "singulr/middleware/logging.py exists",
+        "Responses include X-Request-ID header",
+        "tests/test_request_logging.py passes"
+      ],
+      "tdd": {
+        "test": {
+          "description": "Write tests/test_request_logging.py asserting X-Request-ID on /health",
+          "passes": false
+        },
+        "implement": {
+          "description": "Add middleware, register in main.py, configure logging format from settings",
+          "passes": false
+        },
+        "refactor": {
+          "passes": false
+        }
+      },
+      "passes": true
+    },
+    {
+      "id": "3",
+      "category": "security",
+      "priority": "high",
+      "description": "Rate-limit /api/verify/precheck and /api/verify/submit per client IP hash",
+      "acceptance": [
+        "Excess requests return HTTP 429",
+        "Limit configurable via VERIFY_RATE_LIMIT_PER_MINUTE in config.py",
+        "tests/test_verify_rate_limit.py passes"
+      ],
+      "tdd": {
+        "test": {
+          "description": "Add tests/test_verify_rate_limit.py that hammers precheck and expects 429",
+          "passes": false
+        },
+        "implement": {
+          "description": "Implement in-memory sliding window limiter in singulr/services/rate_limit.py",
+          "passes": false
+        },
+        "refactor": {
+          "passes": false
+        }
+      },
+      "passes": true
+    },
+    {
+      "id": "4",
+      "category": "admin",
+      "priority": "medium",
+      "description": "Read-only GET /api/admin/bans protected by ADMIN_API_KEY header",
+      "dependsOn": [
+        "2"
+      ],
+      "acceptance": [
+        "GET /api/admin/bans without key returns 401",
+        "With valid X-Admin-Key returns JSON list of bans",
+        "tests/test_admin_api.py passes"
+      ],
+      "tdd": {
+        "test": {
+          "description": "Add tests/test_admin_api.py with api_client fixture",
+          "passes": false
+        },
+        "implement": {
+          "description": "Add singulr/api/admin.py router and wire in main.py",
+          "passes": false
+        },
+        "refactor": {
+          "passes": false
+        }
+      },
+      "passes": true
+    },
+    {
+      "id": "5",
+      "category": "observability",
+      "priority": "medium",
+      "description": "Extend GET /health with version and uptime_seconds fields",
+      "acceptance": [
+        "GET /health JSON includes version string and uptime_seconds number",
+        "tests/test_health.py updated and passing"
+      ],
+      "tdd": {
+        "test": {
+          "description": "Extend tests/test_health.py for version and uptime_seconds",
+          "passes": false
+        },
+        "implement": {
+          "description": "Track app start time in main.py lifespan, read version from singulr package or pyproject",
+          "passes": false
+        },
+        "refactor": {
+          "passes": false
+        }
+      },
+      "passes": true
+    },
+    {
+      "id": "6",
+      "category": "docs",
+      "priority": "medium",
+      "description": "Write docs/DEPLOY.md runbook covering compose prod, env vars, Telegram setup, and health checks",
+      "dependsOn": [
+        "1",
+        "4",
+        "5"
+      ],
+      "acceptance": [
+        "docs/DEPLOY.md exists with >= 12 numbered steps",
+        "Documents ADMIN_API_KEY and docker compose prod command",
+        "tests/test_deploy_doc.py asserts DEPLOY.md mentions key sections"
+      ],
+      "tdd": {
+        "test": {
+          "description": "Add tests/test_deploy_doc.py checking DEPLOY.md headings and keywords",
+          "passes": false
+        },
+        "implement": {
+          "description": "Write docs/DEPLOY.md; link from README",
+          "passes": false
+        },
+        "refactor": {
+          "passes": false
+        }
+      },
+      "passes": true
+    }
+  ]
+}

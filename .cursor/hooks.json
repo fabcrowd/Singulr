@@ -14,7 +14,7 @@
     "afterShellExecution": [
       {
         "command": "node .cursor/hooks/capture-shell-failure.js",
-        "matcher": "pytest|ruff|verify\\.ps1|orchestrator verify"
+        "matcher": "pytest|ruff|verify\\.ps1|orchestrator (verify|autopilot)"
       }
     ]
   }

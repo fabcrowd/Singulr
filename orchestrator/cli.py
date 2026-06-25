@@ -5,10 +5,23 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from pathlib import Path
 
+from orchestrator.autopilot_cursor import (
+    append_note,
+    load_task_file,
+    mark_requirement,
+    pick_next_requirement,
+    set_active_task,
+    status_summary,
+    verify_requirement,
+    write_next_requirement,
+)
 from orchestrator.dispatch import build_brief, write_brief, write_next_task_md
 from orchestrator.lessons import append_lesson, write_golden_packet
+from orchestrator.runtime import get_agent_runtime, runtime_label, set_agent_runtime
 from orchestrator.prd import (
+    REPO_ROOT,
     get_task,
     lane_for_phase,
     load_tasks,
@@ -140,6 +153,110 @@ def cmd_brief(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_runtime(args: argparse.Namespace) -> int:
+    """Show or set agent runtime (cursor | claude-code)."""
+    if args.set:
+        try:
+            set_agent_runtime(args.set)
+        except ValueError as exc:
+            print(exc)
+            return 1
+        print(f"Agent runtime: {args.set} ({runtime_label(args.set)})")
+        print("Docs: docs/AGENT_RUNTIME.md")
+        return 0
+    rt = get_agent_runtime()
+    print(f"runtime: {rt}")
+    print(f"label: {runtime_label(rt)}")
+    doc = "docs/autopilot/CLAUDE-CODE-AUTOPILOT.md" if rt == "claude-code" else "docs/autopilot/CURSOR-AUTOPILOT.md"
+    print(f"guide: {doc}")
+    return 0
+
+
+def cmd_autopilot_use(args: argparse.Namespace) -> int:
+    """Set active autopilot task file for agent sessions."""
+    path = Path(args.task_file)
+    if not path.is_absolute():
+        path = REPO_ROOT / path
+    if not path.exists():
+        print(f"Task file not found: {path}")
+        return 1
+    rel = set_active_task(path)
+    print(f"Active autopilot task: {rel}")
+    print("Run: python -m orchestrator autopilot next")
+    return 0
+
+
+def cmd_autopilot_status(_: argparse.Namespace) -> int:
+    """Print autopilot requirement dashboard."""
+    try:
+        print(status_summary())
+    except FileNotFoundError as exc:
+        print(exc)
+        return 1
+    return 0
+
+
+def cmd_autopilot_next(_: argparse.Namespace) -> int:
+    """Assign next autopilot requirement to tasks/NEXT_TASK.md."""
+    try:
+        task = load_task_file()
+    except FileNotFoundError as exc:
+        print(exc)
+        return 1
+    req = pick_next_requirement(task)
+    if req is None:
+        print("No eligible requirements. All done or blocked.")
+        return 1
+    path = write_next_requirement(task, req)
+    append_note(task, f"Assigned req {req.id} to Cursor (NEXT_TASK)")
+    print(f"Assigned requirement {req.id}: {req.description[:80]}")
+    print(f"  Brief: orchestrator/briefs/AP-{req.id}.md")
+    print(f"  NEXT_TASK: {path.relative_to(REPO_ROOT)}")
+    print("Open Cursor Agent and implement. Then verify + complete.")
+    return 0
+
+
+def cmd_autopilot_verify(args: argparse.Namespace) -> int:
+    """Verify one autopilot requirement."""
+    report = verify_requirement(args.req_id, full_suite=not args.quick)
+    print(
+        json.dumps(
+            {
+                "req_id": report.req_id,
+                "passed": report.passed,
+                "checks": [
+                    {"name": c.name, "passed": c.passed, "detail": c.detail[:200]}
+                    for c in report.checks
+                ],
+            },
+            indent=2,
+        )
+    )
+    return 0 if report.passed else 1
+
+
+def cmd_autopilot_complete(args: argparse.Namespace) -> int:
+    """Verify and mark autopilot requirement done."""
+    report = verify_requirement(args.req_id, full_suite=True)
+    if not report.passed:
+        print("Verification failed. Requirement not marked done.")
+        return 1
+    mark_requirement(args.req_id, passes=True)
+    task = load_task_file()
+    append_note(task, f"Completed req {args.req_id}")
+    print(f"OK requirement {args.req_id} complete")
+    return 0
+
+
+def cmd_autopilot_fail(args: argparse.Namespace) -> int:
+    """Mark requirement stuck and log note."""
+    mark_requirement(args.req_id, passes=False, stuck=True, reason=args.reason)
+    task = load_task_file()
+    append_note(task, f"FAILED req {args.req_id}: {args.reason}")
+    print(f"Requirement {args.req_id} marked stuck. See notes file.")
+    return 0
+
+
 def main() -> None:
     """Entry point."""
     parser = argparse.ArgumentParser(description="Singulr Conductor orchestrator")
@@ -148,7 +265,7 @@ def main() -> None:
     p_status = sub.add_parser("status", help="Task dashboard")
     p_status.set_defaults(func=cmd_status)
 
-    p_next = sub.add_parser("next", help="Assign next task")
+    p_next = sub.add_parser("next", help="Assign next PRD task")
     p_next.add_argument("--lane", default=None)
     p_next.set_defaults(func=cmd_next)
 
@@ -156,25 +273,56 @@ def main() -> None:
     p_dispatch.add_argument("--parallel", type=int, default=4)
     p_dispatch.set_defaults(func=cmd_dispatch)
 
-    p_verify = sub.add_parser("verify", help="Verify task")
+    p_verify = sub.add_parser("verify", help="Verify PRD task")
     p_verify.add_argument("task_id")
     p_verify.add_argument("--quick", action="store_true", help="Skip full suite")
     p_verify.set_defaults(func=cmd_verify)
 
-    p_complete = sub.add_parser("complete", help="Verify and mark done")
+    p_complete = sub.add_parser("complete", help="Verify and mark PRD task done")
     p_complete.add_argument("task_id")
     p_complete.set_defaults(func=cmd_complete)
 
-    p_fail = sub.add_parser("fail", help="Record failure + lesson")
+    p_fail = sub.add_parser("fail", help="Record PRD failure + lesson")
     p_fail.add_argument("task_id")
     p_fail.add_argument("--reason", required=True)
     p_fail.add_argument("--verify", action="store_true")
     p_fail.set_defaults(func=cmd_fail)
 
-    p_brief = sub.add_parser("brief", help="Show task brief")
+    p_brief = sub.add_parser("brief", help="Show PRD task brief")
     p_brief.add_argument("task_id")
     p_brief.add_argument("--write", action="store_true")
     p_brief.set_defaults(func=cmd_brief)
+
+    p_runtime = sub.add_parser("runtime", help="Show or set agent runtime (cursor | claude-code)")
+    p_runtime.add_argument("set", nargs="?", help="cursor or claude-code")
+    p_runtime.set_defaults(func=cmd_runtime)
+
+    ap = sub.add_parser("autopilot", help="Gens-ai autopilot tasks (Cursor or Claude Code bridge)")
+    ap_sub = ap.add_subparsers(dest="ap_command", required=True)
+
+    ap_use = ap_sub.add_parser("use", help="Set active task JSON file")
+    ap_use.add_argument("task_file")
+    ap_use.set_defaults(func=cmd_autopilot_use)
+
+    ap_status = ap_sub.add_parser("status", help="Requirement dashboard")
+    ap_status.set_defaults(func=cmd_autopilot_status)
+
+    ap_next = ap_sub.add_parser("next", help="Assign next requirement to NEXT_TASK")
+    ap_next.set_defaults(func=cmd_autopilot_next)
+
+    ap_verify = ap_sub.add_parser("verify", help="Verify requirement")
+    ap_verify.add_argument("req_id")
+    ap_verify.add_argument("--quick", action="store_true")
+    ap_verify.set_defaults(func=cmd_autopilot_verify)
+
+    ap_complete = ap_sub.add_parser("complete", help="Verify and complete requirement")
+    ap_complete.add_argument("req_id")
+    ap_complete.set_defaults(func=cmd_autopilot_complete)
+
+    ap_fail = ap_sub.add_parser("fail", help="Mark requirement stuck")
+    ap_fail.add_argument("req_id")
+    ap_fail.add_argument("--reason", required=True)
+    ap_fail.set_defaults(func=cmd_autopilot_fail)
 
     args = parser.parse_args()
     sys.exit(args.func(args))

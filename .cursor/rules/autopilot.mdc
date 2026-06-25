@@ -1,0 +1,28 @@
+---
+description: Cursor Autopilot TDD workflow for Gens-ai task JSON files
+globs:
+alwaysApply: true
+---
+
+# Autopilot (agent runtime)
+
+Check `.autopilot/runtime.json` (`cursor` | `claude-code`). Hub: `docs/AGENT_RUNTIME.md`.
+
+When `.autopilot/active.json` exists, you are in **Autopilot mode**.
+
+1. Read `tasks/NEXT_TASK.md` first — it is the current requirement brief.
+2. Follow strict TDD: failing test → minimal implementation → refactor.
+3. Before claiming done, run:
+   - `python -m orchestrator autopilot verify <req_id>`
+   - `python -m orchestrator autopilot complete <req_id>` (only if verify passes)
+4. On blocker: `python -m orchestrator autopilot fail <req_id> --reason "..."`
+5. **Immediately continue:** `python -m orchestrator autopilot next` → implement the next requirement in the **same turn**.
+6. **No eligible req?** Follow `docs/PRODUCTION_READINESS.md` — switch packs or self-assign from PRD. Never stop idle.
+7. **Stop only when production-ready:** `SINGULR_PRODUCTION_READY` per that doc, or `REPO_LEAD_BLOCKED` if truly blocked.
+
+Never stop after one `complete` with only a summary. Autopilot JSON is backlog, not the definition of done.
+
+Feedback loops are defined in `autopilot.json` (pytest, ruff, hardhat). Do not skip them.
+
+**Cursor:** use `python -m orchestrator autopilot` — not `~/.local/bin/autopilot`.  
+**Claude Code:** use Gens-ai `autopilot <json>` or the same orchestrator bridge; see `CLAUDE.md`.

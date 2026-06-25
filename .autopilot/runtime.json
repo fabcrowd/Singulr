@@ -1,0 +1,4 @@
+{
+  "runtime": "cursor",
+  "note": "Set to claude-code when using Claude Code + Gens-ai autopilot. Run: scripts\\set-agent-runtime.ps1"
+}

@@ -5,6 +5,7 @@ from __future__ import annotations
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from singulr.domain.ban_taxonomy import BanCategory, BanSeverity
 from singulr.models import Ban, Profile, StylometryProfile
 from singulr.services.blockchain import ChainClient
 from singulr.services.hashing import hash_fingerprint
@@ -19,6 +20,8 @@ async def record_ban(
     telegram_user_id: int,
     channel_id: int,
     reason: str = "admin_ban",
+    category: BanCategory = BanCategory.OTHER,
+    severity: BanSeverity = BanSeverity.MEDIUM,
 ) -> str:
     """Persist ban locally and on-chain; returns fingerprint hash."""
     profile = await session.scalar(
@@ -37,6 +40,8 @@ async def record_ban(
             stylometry_hash=stylo_hash,
             ip_hash=profile.ip_hash if profile else None,
             reason=reason,
+            category=category.value,
+            severity=severity.value,
         )
         session.add(ban)
         await session.commit()

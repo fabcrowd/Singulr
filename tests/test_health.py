@@ -24,3 +24,7 @@ async def test_health_reports_component_status() -> None:
     assert isinstance(body["db_ok"], bool)
     assert isinstance(body["bot_configured"], bool)
     assert isinstance(body["chain_enabled"], bool)
+    assert body["version"] == "0.1.0"
+    assert "uptime_seconds" in body
+    assert isinstance(body["uptime_seconds"], (int, float))
+    assert body["uptime_seconds"] >= 0

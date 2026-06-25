@@ -19,3 +19,6 @@ dist/
 orchestrator/runs/**/*
 !orchestrator/runs/.gitkeep
 tasks/NEXT_TASK.md
+tasks/REPO_LEAD_AGENT_COMMAND.txt
+tasks/REPO_LEAD_HANDOFF.txt
+orchestrator/briefs/AP-*.md

@@ -125,6 +125,24 @@ def format_elevated_risk_body(
     return "\n".join(lines)
 
 
+def format_pending_review_body(
+    *,
+    user_id: int,
+    reason: str,
+    risk_factors: list[str] | None = None,
+    matched_ban_id: int | None = None,
+) -> str:
+    """Build ops channel body for pending ban-evasion review."""
+    body = format_elevated_risk_body(
+        user_id=user_id,
+        reason=reason,
+        risk_factors=risk_factors,
+    )
+    if matched_ban_id is not None:
+        body = f"{body}\nMatched ban ID: {matched_ban_id}"
+    return body
+
+
 def format_ban_evasion_body(
     *,
     user_id: int,
@@ -169,6 +187,7 @@ def _build_log_body(
     fingerprint_hash: str | None,
     match_score: float | None,
     ban_fingerprint: str | None,
+    matched_ban_id: int | None = None,
 ) -> str:
     """Resolve the message body for a log channel event."""
     if event_type == "ELEVATED_RISK" and user_id is not None:
@@ -176,6 +195,13 @@ def _build_log_body(
             user_id=user_id,
             reason=reason or "",
             risk_factors=risk_factors,
+        )
+    if event_type == "PENDING_REVIEW" and user_id is not None:
+        return format_pending_review_body(
+            user_id=user_id,
+            reason=reason or "",
+            risk_factors=risk_factors,
+            matched_ban_id=matched_ban_id,
         )
     if event_type == "BAN_EVASION" and user_id is not None:
         return format_ban_evasion_body(
@@ -191,6 +217,85 @@ def _build_log_body(
             ban_fingerprint=ban_fingerprint,
         )
     return body or ""
+
+
+async def notify_user_denied(app: Application, user_id: int, reason: str) -> None:
+    """Tell the user their join request was denied with a reason."""
+    text = f"Your join request was denied.\n\nReason: {reason}"
+    await app.bot.send_message(chat_id=user_id, text=text)
+
+
+async def resolve_admin_ops_chat_id(
+    channel_id: int,
+    *,
+    override: int | None = None,
+) -> int | None:
+    """Resolve ops chat from override, env, or per-channel policy."""
+    if override:
+        return override
+    settings = get_settings()
+    if settings.admin_ops_chat_id:
+        return settings.admin_ops_chat_id
+    from singulr.db import SessionLocal
+    from singulr.services.channel_policy import get_effective_channel_policy
+
+    async with SessionLocal() as session:
+        policy = await get_effective_channel_policy(session, channel_id)
+        return policy.admin_ops_chat_id
+
+
+async def log_to_ops_channel(
+    app: Application,
+    event_type: str,
+    *,
+    channel_id: int,
+    admin_ops_chat_id: int | None = None,
+    body: str | None = None,
+    user_id: int | None = None,
+    reason: str | None = None,
+    risk_factors: list[str] | None = None,
+    fingerprint_hash: str | None = None,
+    matched_ban_id: int | None = None,
+) -> None:
+    """Post structured alert to the admin ops channel with optional Permit/Deny actions."""
+    ops_chat = await resolve_admin_ops_chat_id(channel_id, override=admin_ops_chat_id)
+    if not ops_chat:
+        return
+    prefix = {
+        "PENDING_REVIEW": "PENDING REVIEW",
+        "BAN_EVASION": "BAN EVASION",
+        "BLOCKED": "BLOCKED",
+    }.get(event_type, event_type)
+    message_body = _build_log_body(
+        event_type,
+        body=body,
+        user_id=user_id,
+        reason=reason,
+        risk_factors=risk_factors,
+        fingerprint_hash=fingerprint_hash,
+        match_score=None,
+        ban_fingerprint=None,
+        matched_ban_id=matched_ban_id,
+    )
+    message = f"{prefix}\n\n{message_body}"
+    keyboard = None
+    if user_id and event_type == "PENDING_REVIEW":
+        keyboard = InlineKeyboardMarkup(
+            [
+                [
+                    InlineKeyboardButton("Permit", callback_data=f"permit_{channel_id}_{user_id}"),
+                    InlineKeyboardButton("Deny", callback_data=f"deny_{channel_id}_{user_id}"),
+                ]
+            ]
+        )
+    try:
+        await app.bot.send_message(
+            chat_id=ops_chat,
+            text=message,
+            reply_markup=keyboard,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Failed to log to ops channel: %s", exc)
 
 
 async def log_to_channel(

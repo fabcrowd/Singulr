@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from singulr.api.security import require_admin_key
 
 from singulr.bot.handlers import apply_verification_decision
 from singulr.bot.runtime import get_application
@@ -15,13 +18,16 @@ from singulr.db import get_session
 from singulr.models import Ban, IPSession, Profile
 from singulr.services.bans import record_ban as persist_ban
 from singulr.services.blockchain import ChainClient
+from singulr.services.channel_policy import EffectivePolicy, get_effective_channel_policy
 from singulr.services.hashing import hash_fingerprint, hash_ip
 from singulr.services.keystroke import build_keystroke_profile
-from singulr.services.matching import Decision, check_known_bad
+from singulr.services.matching import Decision, MatchResult, check_known_bad
+from singulr.services.rate_limit import allow_verify_request
 from singulr.services.tokens import mark_token_used, validate_token
 
 router = APIRouter(prefix="/api", tags=["verify"])
 _chain = ChainClient()
+logger = logging.getLogger(__name__)
 
 
 class PrecheckBody(BaseModel):
@@ -64,6 +70,16 @@ def _client_ip(request: Request) -> str:
     return "0.0.0.0"
 
 
+def _enforce_verify_rate_limit(request: Request) -> None:
+    """Raise 429 when the client IP exceeds the verify rate limit."""
+    settings = get_settings()
+    if not allow_verify_request(
+        _client_ip(request),
+        limit_per_minute=settings.verify_rate_limit_per_minute,
+    ):
+        raise HTTPException(status_code=429, detail="rate_limited")
+
+
 async def _notify_bot(payload: dict[str, Any]) -> None:
     """Apply Telegram bot action when verification completes."""
     app = get_application()
@@ -77,6 +93,68 @@ async def _notify_bot(payload: dict[str, Any]) -> None:
         reason=payload.get("reason", ""),
         risk_factors=payload.get("risk_factors"),
         fingerprint_hash=payload.get("fingerprint_hash"),
+        admin_ops_chat_id=payload.get("admin_ops_chat_id"),
+        matched_ban_id=payload.get("matched_ban_id"),
+    )
+
+
+def _decision_name(result: MatchResult) -> str:
+    """Map matching engine decision to API and bot payload names."""
+    if result.decision == Decision.BLOCK:
+        return "block"
+    if result.decision == Decision.PENDING:
+        return "pending"
+    if result.decision == Decision.FLAG:
+        return "flag"
+    return "approve"
+
+
+def _decision_payload(
+    *,
+    decision: str,
+    telegram_user_id: int,
+    channel_id: int,
+    policy: EffectivePolicy,
+    result: MatchResult | None = None,
+    fingerprint_hash: str | None = None,
+) -> dict[str, Any]:
+    """Build notify-bot payload with channel policy audit fields."""
+    payload: dict[str, Any] = {
+        "decision": decision,
+        "telegram_user_id": telegram_user_id,
+        "channel_id": channel_id,
+        "security_preset": policy.security_preset,
+    }
+    if result:
+        if result.reason:
+            payload["reason"] = result.reason
+        if result.risk_factors:
+            payload["risk_factors"] = result.risk_factors
+        if result.matched_ban_id is not None:
+            payload["matched_ban_id"] = result.matched_ban_id
+    if fingerprint_hash:
+        payload["fingerprint_hash"] = fingerprint_hash
+    if policy.admin_ops_chat_id:
+        payload["admin_ops_chat_id"] = policy.admin_ops_chat_id
+    return payload
+
+
+def _log_verification_decision(
+    *,
+    telegram_user_id: int,
+    channel_id: int,
+    decision: str,
+    policy: EffectivePolicy,
+    source: str,
+) -> None:
+    """Record decision audit fields including effective security preset."""
+    logger.info(
+        "verification_decision source=%s user=%s channel=%s decision=%s security_preset=%s",
+        source,
+        telegram_user_id,
+        channel_id,
+        decision,
+        policy.security_preset,
     )
 
 
@@ -87,6 +165,7 @@ async def precheck(
     session: AsyncSession = Depends(get_session),
 ) -> dict[str, Any]:
     """Run ban checks before rendering the verification form."""
+    _enforce_verify_rate_limit(request)
     token_row = await validate_token(session, body.token)
     if not token_row:
         raise HTTPException(status_code=410, detail="link_expired")
@@ -104,12 +183,15 @@ async def precheck(
     )
     await session.commit()
 
+    policy = await get_effective_channel_policy(session, token_row.channel_id)
     result = await check_known_bad(
         session,
         _chain,
         telegram_user_id=token_row.telegram_user_id,
         fingerprint_hash=fingerprint_hash,
         ip_hash=ip_hash,
+        channel_id=token_row.channel_id,
+        policy=policy,
     )
 
     if result.decision == Decision.BLOCK:
@@ -130,6 +212,7 @@ async def submit(
     session: AsyncSession = Depends(get_session),
 ) -> dict[str, Any]:
     """Process verification, notify bot, and return decision."""
+    _enforce_verify_rate_limit(request)
     if not body.privacy_accepted:
         raise HTTPException(status_code=400, detail="privacy_required")
 
@@ -150,6 +233,7 @@ async def submit(
     )
     env_flags = body.env_flags.model_dump() if body.env_flags else None
 
+    policy = await get_effective_channel_policy(session, token_row.channel_id)
     result = await check_known_bad(
         session,
         _chain,
@@ -158,6 +242,8 @@ async def submit(
         ip_hash=ip_hash,
         keystroke_profile=keystroke_profile,
         env_flags=env_flags,
+        channel_id=token_row.channel_id,
+        policy=policy,
     )
 
     await mark_token_used(session, body.token)
@@ -172,6 +258,15 @@ async def submit(
     )
     await session.commit()
 
+    decision_name = _decision_name(result)
+    _log_verification_decision(
+        telegram_user_id=token_row.telegram_user_id,
+        channel_id=token_row.channel_id,
+        decision=decision_name,
+        policy=policy,
+        source="submit",
+    )
+
     if result.decision == Decision.BLOCK:
         ban = Ban(
             telegram_user_id=token_row.telegram_user_id,
@@ -185,24 +280,25 @@ async def submit(
         if tx:
             ban.chain_tx = tx
             await session.commit()
-        payload = {
-            "decision": "block",
-            "telegram_user_id": token_row.telegram_user_id,
-            "channel_id": token_row.channel_id,
-            "reason": result.reason,
-            "fingerprint_hash": fingerprint_hash,
-        }
+        payload = _decision_payload(
+            decision="block",
+            telegram_user_id=token_row.telegram_user_id,
+            channel_id=token_row.channel_id,
+            policy=policy,
+            result=result,
+            fingerprint_hash=fingerprint_hash,
+        )
         await _notify_bot(payload)
         return payload
 
-    if result.decision == Decision.FLAG:
-        payload = {
-            "decision": "flag",
-            "telegram_user_id": token_row.telegram_user_id,
-            "channel_id": token_row.channel_id,
-            "reason": result.reason,
-            "risk_factors": result.risk_factors,
-        }
+    if result.decision in {Decision.FLAG, Decision.PENDING}:
+        payload = _decision_payload(
+            decision=decision_name,
+            telegram_user_id=token_row.telegram_user_id,
+            channel_id=token_row.channel_id,
+            policy=policy,
+            result=result,
+        )
         await _notify_bot(payload)
         return payload
 
@@ -217,11 +313,19 @@ async def submit(
     session.add(profile)
     await session.commit()
 
-    payload = {
-        "decision": "approve",
-        "telegram_user_id": token_row.telegram_user_id,
-        "channel_id": token_row.channel_id,
-    }
+    _log_verification_decision(
+        telegram_user_id=token_row.telegram_user_id,
+        channel_id=token_row.channel_id,
+        decision="approve",
+        policy=policy,
+        source="submit",
+    )
+    payload = _decision_payload(
+        decision="approve",
+        telegram_user_id=token_row.telegram_user_id,
+        channel_id=token_row.channel_id,
+        policy=policy,
+    )
     await _notify_bot(payload)
     return payload
 
@@ -229,6 +333,7 @@ async def submit(
 @router.post("/internal/ban")
 async def admin_ban(
     payload: dict[str, Any],
+    _: None = Depends(require_admin_key),
     session: AsyncSession = Depends(get_session),
 ) -> dict[str, Any]:
     """Record a ban from admin inline button."""

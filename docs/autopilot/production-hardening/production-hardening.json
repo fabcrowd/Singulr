@@ -34,16 +34,20 @@
           "description": "Create .github/workflows/ci.yml with cache for pip and npm",
           "passes": false
         },
-        "refactor": { "passes": false }
+        "refactor": {
+          "passes": false
+        }
       },
-      "passes": false
+      "passes": true
     },
     {
       "id": "2",
       "category": "infrastructure",
       "priority": "high",
       "description": "Add production Dockerfile and document docker run in README",
-      "dependsOn": ["1"],
+      "dependsOn": [
+        "1"
+      ],
       "acceptance": [
         "Dockerfile builds uvicorn app on port 8000",
         "README has a Docker section with build and run commands",
@@ -58,16 +62,20 @@
           "description": "Create Dockerfile and optional docker-compose.prod.yml service profile",
           "passes": false
         },
-        "refactor": { "passes": false }
+        "refactor": {
+          "passes": false
+        }
       },
-      "passes": false
+      "passes": true
     },
     {
       "id": "3",
       "category": "functional",
       "priority": "medium",
       "description": "Add API smoke tests for /verify HTML and static assets",
-      "dependsOn": ["1"],
+      "dependsOn": [
+        "1"
+      ],
       "acceptance": [
         "tests/test_verify_page.py exists",
         "GET /verify returns 200 and references verify.js",
@@ -82,9 +90,11 @@
           "description": "Fix any static routing gaps so tests pass without changing verification logic",
           "passes": false
         },
-        "refactor": { "passes": false }
+        "refactor": {
+          "passes": false
+        }
       },
-      "passes": false
+      "passes": true
     }
   ]
 }
