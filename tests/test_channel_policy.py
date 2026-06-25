@@ -56,6 +56,8 @@ def test_effective_policy_field_types() -> None:
         ban_evasion_auto_deny_threshold=0.92,
         local_similarity_flag_threshold=0.85,
         network_registry_mode="read",
+        share_bans_to_network=False,
+        network_auto_reject_categories=["scam_fraud", "raid_coordination"],
         admin_ops_chat_id=None,
     )
 

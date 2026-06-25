@@ -60,3 +60,9 @@ def test_merge_feature_vectors_improves_author_discrimination() -> None:
     )
 
     assert merged_gap > single_gap
+
+
+def test_extract_features_returns_empty_for_blank_message() -> None:
+    """Blank channel messages produce no stylometry features."""
+    assert extract_features("") == {}
+    assert extract_features("   ") == {}

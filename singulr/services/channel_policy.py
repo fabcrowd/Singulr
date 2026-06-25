@@ -20,7 +20,12 @@ class EffectivePolicy:
     ban_evasion_auto_deny_threshold: float
     local_similarity_flag_threshold: float
     network_registry_mode: str
+    share_bans_to_network: bool
+    network_auto_reject_categories: list[str]
     admin_ops_chat_id: int | None
+
+
+DEFAULT_NETWORK_AUTO_REJECT = ["scam_fraud", "raid_coordination"]
 
 
 async def get_effective_channel_policy(
@@ -38,6 +43,8 @@ async def get_effective_channel_policy(
             ban_evasion_auto_deny_threshold=settings.ban_evasion_auto_deny_threshold,
             local_similarity_flag_threshold=settings.local_similarity_flag_threshold,
             network_registry_mode=settings.default_network_registry_mode,
+            share_bans_to_network=False,
+            network_auto_reject_categories=list(DEFAULT_NETWORK_AUTO_REJECT),
             admin_ops_chat_id=settings.log_channel_id or None,
         )
 
@@ -55,6 +62,10 @@ async def get_effective_channel_policy(
             else settings.local_similarity_flag_threshold
         ),
         network_registry_mode=row.network_registry_mode,
+        share_bans_to_network=row.share_bans_to_network,
+        network_auto_reject_categories=list(
+            row.network_auto_reject_categories or DEFAULT_NETWORK_AUTO_REJECT
+        ),
         admin_ops_chat_id=row.admin_ops_chat_id,
     )
 
@@ -102,6 +113,8 @@ async def upsert_channel_security_settings(
     preset: str,
     evasion_mode: str,
     admin_ops_chat_id: int | None,
+    network_registry_mode: str | None = None,
+    network_auto_reject_categories: list[str] | None = None,
 ) -> ChannelSecuritySettings:
     """Create or update channel policy from wizard answers."""
     resolved = resolve_wizard_thresholds(preset, evasion_mode)
@@ -112,10 +125,16 @@ async def upsert_channel_security_settings(
     row.security_preset = resolved.security_preset
     row.ban_evasion_auto_deny_threshold = resolved.ban_evasion_auto_deny_threshold
     row.local_similarity_flag_threshold = resolved.local_similarity_flag_threshold
-    row.network_registry_mode = resolved.network_registry_mode
+    mode = network_registry_mode if network_registry_mode is not None else resolved.network_registry_mode
+    row.network_registry_mode = mode
+    row.share_bans_to_network = mode == "read_write"
+    if network_auto_reject_categories is not None:
+        row.network_auto_reject_categories = network_auto_reject_categories
+    elif row.network_auto_reject_categories is None:
+        row.network_auto_reject_categories = list(DEFAULT_NETWORK_AUTO_REJECT)
     row.admin_ops_chat_id = admin_ops_chat_id
     row.wizard_completed_at = datetime.now(UTC)
-    row.wizard_version = 1
+    row.wizard_version = 2
     await session.commit()
     await session.refresh(row)
     return row
@@ -124,10 +143,14 @@ async def upsert_channel_security_settings(
 def format_policy_summary(row: ChannelSecuritySettings) -> str:
     """Human-readable summary for wizard confirmation."""
     ops = row.admin_ops_chat_id if row.admin_ops_chat_id else "(not set)"
+    categories = ", ".join(row.network_auto_reject_categories or DEFAULT_NETWORK_AUTO_REJECT)
+    share = "yes" if row.share_bans_to_network else "no"
     return (
         f"Preset: {row.security_preset}\n"
         f"Auto-deny threshold: {row.ban_evasion_auto_deny_threshold:.2f}\n"
         f"Flag threshold: {row.local_similarity_flag_threshold:.2f}\n"
         f"Network registry: {row.network_registry_mode}\n"
+        f"Share bans to network: {share}\n"
+        f"Network auto-reject: {categories}\n"
         f"Ops chat: {ops}"
     )

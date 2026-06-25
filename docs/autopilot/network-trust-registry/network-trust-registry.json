@@ -487,7 +487,7 @@
         "Contract artifacts generated under artifacts/",
         "Category enum matches Python BanCategory ordinals or documented mapping"
       ],
-      "passes": false
+      "passes": true
     },
     {
       "id": "9",
@@ -545,7 +545,7 @@
         "Disabled chain leaves DB-only path unchanged",
         "Enabled chain stores chain_tx on Ban"
       ],
-      "passes": false
+      "passes": true
     },
     {
       "id": "10",
@@ -605,7 +605,7 @@
         "network_auto_reject_categories respected",
         "Decision audit includes network_score factor"
       ],
-      "passes": false
+      "passes": true
     },
     {
       "id": "11",
@@ -665,7 +665,7 @@
         "read_write mode required for chain write",
         "Local ban always persisted"
       ],
-      "passes": false
+      "passes": true
     },
     {
       "id": "12",
@@ -722,7 +722,7 @@
         "Summary shows network mode and categories",
         "Verify uses updated policy without restart"
       ],
-      "passes": false
+      "passes": true
     },
     {
       "id": "13",
@@ -784,7 +784,7 @@
         "User with overturned ban can verify APPROVE when score below threshold",
         "History retained; ban row not deleted"
       ],
-      "passes": false
+      "passes": true
     },
     {
       "id": "14",

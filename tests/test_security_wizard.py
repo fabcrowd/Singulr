@@ -13,11 +13,16 @@ from telegram.constants import ChatType
 from singulr.bot.security_wizard import (
     WIZARD_CHANNEL_KEY,
     WIZARD_EVASION_KEY,
+    WIZARD_NET_CATEGORIES_KEY,
+    WIZARD_NETWORK_MODE_KEY,
     WIZARD_OPS_KEY,
     WIZARD_PRESET_KEY,
     WizardState,
     confirm_selected,
+    delta_selected,
     evasion_selected,
+    network_categories_selected,
+    network_mode_selected,
     ops_selected,
     preset_selected,
     security_command,
@@ -87,13 +92,11 @@ async def test_security_rejects_non_admin(monkeypatch: pytest.MonkeyPatch) -> No
 
 @pytest.mark.asyncio
 async def test_wizard_state_transitions_to_confirm() -> None:
-    """Preset → evasion → ops → confirm flow advances conversation state."""
+    """Preset → evasion → ops → network → categories → confirm."""
     context = MagicMock()
     context.user_data = {WIZARD_CHANNEL_KEY: 100, WIZARD_PRESET_KEY: "balanced"}
 
     preset_update = _callback_update("sec_preset_balanced")
-    with patch("singulr.bot.security_wizard.is_channel_admin", new_callable=AsyncMock, return_value=True):
-        pass
     state = await preset_selected(preset_update, context)
     assert state == WizardState.EVASION
 
@@ -108,8 +111,22 @@ async def test_wizard_state_transitions_to_confirm() -> None:
         mock_settings.return_value.admin_ops_chat_id = 0
         mock_settings.return_value.log_channel_id = 0
         state = await ops_selected(ops_update, context)
+    assert state == WizardState.NETWORK_MODE
+
+    context.user_data[WIZARD_OPS_KEY] = None
+    net_update = _callback_update("sec_net_read_write")
+    state = await network_mode_selected(net_update, context)
+    assert state == WizardState.NETWORK_CATEGORIES
+    assert context.user_data[WIZARD_NETWORK_MODE_KEY] == "read_write"
+
+    context.user_data[WIZARD_NET_CATEGORIES_KEY] = {"scam_fraud", "spam"}
+    cat_update = _callback_update("sec_cat_done")
+    state = await network_categories_selected(cat_update, context)
     assert state == WizardState.CONFIRM
-    ops_update.callback_query.edit_message_text.assert_awaited()
+    cat_update.callback_query.edit_message_text.assert_awaited()
+    summary = cat_update.callback_query.edit_message_text.await_args.args[0]
+    assert "read_write" in summary
+    assert "scam_fraud" in summary
 
 
 @pytest.mark.asyncio
@@ -121,10 +138,16 @@ async def test_upsert_persists_wizard_completed_at(db_session: AsyncSession) -> 
         preset="strict",
         evasion_mode="review_most",
         admin_ops_chat_id=-100555,
+        network_registry_mode="read_write",
+        network_auto_reject_categories=["scam_fraud", "raid_coordination"],
     )
 
     assert row.security_preset == "strict"
     assert row.wizard_completed_at is not None
+    assert row.wizard_version == 2
+    assert row.network_registry_mode == "read_write"
+    assert row.share_bans_to_network is True
+    assert row.network_auto_reject_categories == ["scam_fraud", "raid_coordination"]
     assert row.admin_ops_chat_id == -100555
     resolved = resolve_wizard_thresholds("strict", "review_most")
     assert row.ban_evasion_auto_deny_threshold == resolved.ban_evasion_auto_deny_threshold
@@ -165,6 +188,8 @@ async def test_confirm_persists_settings(db_session: AsyncSession, monkeypatch: 
         WIZARD_PRESET_KEY: "balanced",
         WIZARD_EVASION_KEY: "high_only",
         WIZARD_OPS_KEY: -100999,
+        WIZARD_NETWORK_MODE_KEY: "read",
+        WIZARD_NET_CATEGORIES_KEY: {"harassment", "scam_fraud"},
     }
     update = _callback_update("sec_confirm_yes")
 
@@ -180,3 +205,89 @@ async def test_confirm_persists_settings(db_session: AsyncSession, monkeypatch: 
     assert row is not None
     assert row.security_preset == "balanced"
     assert row.wizard_completed_at is not None
+    assert row.wizard_version == 2
+    assert row.network_registry_mode == "read"
+    assert set(row.network_auto_reject_categories or []) == {"harassment", "scam_fraud"}
+
+
+@pytest.mark.asyncio
+async def test_category_toggle_updates_selection() -> None:
+    """Tapping a category chip toggles membership in the selection set."""
+    context = MagicMock()
+    context.user_data = {
+        WIZARD_CHANNEL_KEY: 100,
+        WIZARD_PRESET_KEY: "balanced",
+        WIZARD_EVASION_KEY: "high_only",
+        WIZARD_OPS_KEY: None,
+        WIZARD_NETWORK_MODE_KEY: "read",
+        WIZARD_NET_CATEGORIES_KEY: {"scam_fraud"},
+    }
+    update = _callback_update("sec_cat_spam")
+    state = await network_categories_selected(update, context)
+    assert state == WizardState.NETWORK_CATEGORIES
+    assert context.user_data[WIZARD_NET_CATEGORIES_KEY] == {"scam_fraud", "spam"}
+
+
+@pytest.mark.asyncio
+async def test_delta_prompt_when_wizard_version_one(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Admins on wizard v1 see delta upgrade prompt on /security."""
+    from datetime import UTC, datetime
+
+    monkeypatch.setenv("CHANNEL_ID", "88010")
+    get_settings.cache_clear()
+    row = await upsert_channel_security_settings(
+        db_session,
+        channel_id=88010,
+        preset="balanced",
+        evasion_mode="high_only",
+        admin_ops_chat_id=None,
+    )
+    row.wizard_version = 1
+    row.wizard_completed_at = datetime.now(UTC)
+    await db_session.commit()
+
+    update = _private_update()
+    context = MagicMock()
+    context.user_data = {}
+
+    with patch("singulr.bot.security_wizard.is_channel_admin", new_callable=AsyncMock, return_value=True):
+        with patch("singulr.bot.security_wizard.SessionLocal") as session_local:
+            session_local.return_value.__aenter__ = AsyncMock(return_value=db_session)
+            session_local.return_value.__aexit__ = AsyncMock(return_value=False)
+            state = await security_command(update, context)
+
+    assert state == WizardState.DELTA
+    text = update.message.reply_text.await_args.args[0]
+    assert "network" in text.lower()
+
+
+@pytest.mark.asyncio
+async def test_delta_new_skips_to_network_mode(db_session: AsyncSession) -> None:
+    """Delta path jumps to network registry questions only."""
+    from datetime import UTC, datetime
+
+    row = ChannelSecuritySettings(
+        channel_id=88011,
+        security_preset="open",
+        ban_evasion_auto_deny_threshold=0.95,
+        local_similarity_flag_threshold=0.90,
+        network_registry_mode="off",
+        wizard_completed_at=datetime.now(UTC),
+        wizard_version=1,
+    )
+    db_session.add(row)
+    await db_session.commit()
+
+    context = MagicMock()
+    context.user_data = {WIZARD_CHANNEL_KEY: 88011}
+    update = _callback_update("sec_delta_new")
+
+    with patch("singulr.bot.security_wizard.SessionLocal") as session_local:
+        session_local.return_value.__aenter__ = AsyncMock(return_value=db_session)
+        session_local.return_value.__aexit__ = AsyncMock(return_value=False)
+        state = await delta_selected(update, context)
+
+    assert state == WizardState.NETWORK_MODE
+    assert context.user_data[WIZARD_PRESET_KEY] == "open"

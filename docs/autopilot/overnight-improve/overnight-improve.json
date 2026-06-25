@@ -94,7 +94,7 @@
           "passes": false
         }
       },
-      "passes": false
+      "passes": true
     },
     {
       "id": "4",
@@ -118,7 +118,7 @@
           "passes": false
         }
       },
-      "passes": false
+      "passes": true
     },
     {
       "id": "5",
@@ -146,7 +146,7 @@
           "passes": false
         }
       },
-      "passes": false
+      "passes": true
     },
     {
       "id": "6",
@@ -177,7 +177,7 @@
           "passes": false
         }
       },
-      "passes": false
+      "passes": true
     },
     {
       "id": "7",
@@ -204,7 +204,7 @@
           "passes": false
         }
       },
-      "passes": false
+      "passes": true
     }
   ]
 }

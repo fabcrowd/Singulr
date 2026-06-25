@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "compile": "hardhat compile",
+    "test": "hardhat test",
     "deploy:adiri": "hardhat run scripts/deploy.js --network adiri",
     "verify": "hardhat verify --network adiri"
   },

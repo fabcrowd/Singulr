@@ -9,7 +9,7 @@ from pathlib import Path
 
 from orchestrator.prd import REPO_ROOT, Task, load_prd
 
-TEST_FUNC_RE = re.compile(r"^\s*def\s+test_", re.MULTILINE)
+TEST_FUNC_RE = re.compile(r"^\s*(?:async\s+)?def\s+test_", re.MULTILINE)
 FILE_EXISTS_RE = re.compile(
     r"^(.+?)\s+exists(?:\s+with\s+>=\s*(\d+)\s+test functions)?\.?$",
     re.IGNORECASE,

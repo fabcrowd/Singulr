@@ -12,8 +12,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from singulr.config import get_settings
 from singulr.models import Ban, IPSession, Profile
 from singulr.services.blockchain import ChainClient
-from singulr.services.channel_policy import EffectivePolicy, get_effective_channel_policy
+from singulr.services.channel_policy import (
+    DEFAULT_NETWORK_AUTO_REJECT,
+    EffectivePolicy,
+    get_effective_channel_policy,
+)
 from singulr.services.keystroke import keystroke_similarity
+from singulr.services.network_reputation import (
+    compute_network_score,
+    network_decision_from_score,
+)
+from singulr.services.reinstatement import is_ban_blocking
 from singulr.services.stylometry import stylometry_similarity
 
 ENV_ANOMALY_RISK = 20
@@ -74,6 +83,8 @@ async def _resolve_effective_policy(
         ban_evasion_auto_deny_threshold=settings.ban_evasion_auto_deny_threshold,
         local_similarity_flag_threshold=settings.local_similarity_flag_threshold,
         network_registry_mode=settings.default_network_registry_mode,
+        share_bans_to_network=False,
+        network_auto_reject_categories=list(DEFAULT_NETWORK_AUTO_REJECT),
         admin_ops_chat_id=settings.log_channel_id or None,
     )
 
@@ -144,7 +155,10 @@ async def check_known_bad(
     factors: list[str] = []
 
     ban_by_user = await session.scalar(
-        select(Ban).where(Ban.telegram_user_id == telegram_user_id)
+        select(Ban).where(
+            Ban.telegram_user_id == telegram_user_id,
+            Ban.status == "active",
+        )
     )
     if ban_by_user:
         return MatchResult(
@@ -154,7 +168,12 @@ async def check_known_bad(
             matched_ban_id=ban_by_user.id,
         )
 
-    ban_by_fp = await session.scalar(select(Ban).where(Ban.fingerprint_hash == fingerprint_hash))
+    ban_by_fp = await session.scalar(
+        select(Ban).where(
+            Ban.fingerprint_hash == fingerprint_hash,
+            Ban.status == "active",
+        )
+    )
     if ban_by_fp:
         return MatchResult(
             Decision.BLOCK,
@@ -170,8 +189,43 @@ async def check_known_bad(
             ["chain_blacklist"],
         )
 
+    if effective_policy.network_registry_mode != "off":
+        reputation = await chain.get_reputation(fingerprint_hash)
+        if reputation["active_bans"] > 0:
+            related_bans = (
+                await session.scalars(select(Ban).where(Ban.fingerprint_hash == fingerprint_hash))
+            ).all()
+            active_meta = [
+                {"category": ban.category, "severity": ban.severity}
+                for ban in related_bans
+                if is_ban_blocking(ban)
+            ]
+            network_score = reputation["score"]
+            if active_meta:
+                network_score = max(
+                    network_score, compute_network_score(active_meta, policy=effective_policy)
+                )
+            factors.append(f"network_score:{network_score}")
+            network_outcome = network_decision_from_score(
+                network_score, policy=effective_policy
+            )
+            if network_outcome == "block":
+                return MatchResult(
+                    Decision.BLOCK,
+                    "Network reputation reject",
+                    factors,
+                )
+            if network_outcome == "pending":
+                return MatchResult(
+                    Decision.PENDING,
+                    "Network reputation review",
+                    factors,
+                )
+
     if ip_hash:
-        ip_ban = await session.scalar(select(Ban).where(Ban.ip_hash == ip_hash))
+        ip_ban = await session.scalar(
+            select(Ban).where(Ban.ip_hash == ip_hash, Ban.status == "active")
+        )
         if ip_ban:
             factors.append("ip_hash_match")
         if await check_ip_velocity(session, ip_hash):
@@ -180,7 +234,9 @@ async def check_known_bad(
     if _env_anomaly_detected(env_flags):
         factors.append(f"env_anomaly:+{ENV_ANOMALY_RISK}")
 
-    bans = (await session.scalars(select(Ban))).all()
+    bans = (
+        await session.scalars(select(Ban).where(Ban.status == "active"))
+    ).all()
     best_keystroke = 0.0
     best_stylo = 0.0
     keystroke_matched_ban: Ban | None = None

@@ -202,3 +202,49 @@
 - [2026-06-25 17:18 UTC] Assigned req 7 to Cursor (NEXT_TASK)
 
 - [2026-06-25 17:18 UTC] Completed req 7
+
+- [2026-06-25 17:27 UTC] Assigned req 8 to Cursor (NEXT_TASK)
+
+- [2026-06-25 17:27 UTC] Assigned req 8 to Cursor (NEXT_TASK)
+
+- [2026-06-25 17:27 UTC] Completed req 8
+
+- [2026-06-25 17:28 UTC] Assigned req 9 to Cursor (NEXT_TASK)
+
+- [2026-06-25 17:30 UTC] Assigned req 9 to Cursor (NEXT_TASK)
+
+- [2026-06-25 17:30 UTC] Assigned req 9 to Cursor (NEXT_TASK)
+
+- [2026-06-25 17:30 UTC] Assigned req 9 to Cursor (NEXT_TASK)
+
+- [2026-06-25 17:30 UTC] Completed req 9
+
+- [2026-06-25 17:30 UTC] Assigned req 10 to Cursor (NEXT_TASK)
+
+- [2026-06-25 17:30 UTC] Completed req 10
+
+- [2026-06-25 17:30 UTC] Assigned req 11 to Cursor (NEXT_TASK)
+
+- [2026-06-25 17:30 UTC] Completed req 11
+
+- [2026-06-25 17:30 UTC] Assigned req 12 to Cursor (NEXT_TASK)
+
+- [2026-06-25 17:32 UTC] Assigned req 12 to Cursor (NEXT_TASK)
+
+- [2026-06-25 17:32 UTC] Assigned req 12 to Cursor (NEXT_TASK)
+
+- [2026-06-25 17:32 UTC] Completed req 12
+
+- [2026-06-25 17:32 UTC] Assigned req 13 to Cursor (NEXT_TASK)
+
+- [2026-06-25 17:34 UTC] Assigned req 13 to Cursor (NEXT_TASK)
+
+- [2026-06-25 17:34 UTC] Assigned req 13 to Cursor (NEXT_TASK)
+
+- [2026-06-25 17:34 UTC] Completed req 13
+
+## Production readiness review (2026-06-25)
+
+- Checklist 1–8: **pass** — `verify.ps1` 144 pytest + ruff + compile; Hardhat 5 tests; `network-trust-registry` 14/14; `overnight-improve` 7/7; core flows covered by `test_api_verify`, `test_bot_ops_workflow`, `test_security_wizard`, `test_reinstatement`; security-review critical finding (permissionless BanRegistry) fixed with `onlyRegistrar`; deep-bug-hunt items fixed (re-ban, inactive unban, schema patches); `DEPLOY.md` unchanged and still accurate.
+- Residual risks (non-blocking for staging): chain write/read client stubs until wallet wiring; `ADMIN_TELEGRAM_ID` unset; production deploy needs registrar address on contract.
+- Deferred post-launch: watcher deduplication; `TRUSTED_PROXY` for rate-limit IP; align verify auto-block chain write with wizard network policy.

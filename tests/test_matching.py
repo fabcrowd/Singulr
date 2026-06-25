@@ -47,6 +47,8 @@ _DEFAULT_POLICY = EffectivePolicy(
     ban_evasion_auto_deny_threshold=0.92,
     local_similarity_flag_threshold=0.85,
     network_registry_mode="read",
+    share_bans_to_network=False,
+    network_auto_reject_categories=["scam_fraud", "raid_coordination"],
     admin_ops_chat_id=None,
 )
 
@@ -54,6 +56,7 @@ _DEFAULT_POLICY = EffectivePolicy(
 def _chain_mock(*, banned: bool = False) -> MagicMock:
     chain = MagicMock()
     chain.is_banned = AsyncMock(return_value=banned)
+    chain.get_reputation = AsyncMock(return_value={"score": 0, "active_bans": 0})
     return chain
 
 

@@ -17,7 +17,9 @@ logger = logging.getLogger(__name__)
 async def find_watcher_matches(session: AsyncSession) -> list[dict]:
     """Return likely matches between active members and banned stylometry."""
     settings = get_settings()
-    bans = (await session.scalars(select(Ban))).all()
+    bans = (
+        await session.scalars(select(Ban).where(Ban.status == "active"))
+    ).all()
     if not bans:
         return []
 

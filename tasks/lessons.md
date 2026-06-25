@@ -30,4 +30,16 @@ Failures and patterns the agent must not repeat. Updated automatically on `orche
 - **Fix:** `.cursor/rules/away-mode.mdc`; senior-singulr-dev away checklist; REPO_LEAD_LOOP_PROMPT owner table; start-repo-lead simplified prompt.
 - **Guard:** Forbidden table in away-mode.mdc; never substitute overnight-autopilot-loop.ps1 or github sync for coding.
 
+### 2026-06-25 — reinstatement — re-ban after overturn silently failed
+- **Symptom:** Admin re-ban left `Ban.status=overturned` while profile showed banned.
+- **Root cause:** `record_ban` skipped updates when a ban row already existed.
+- **Fix:** Reactivate overturned/expired rows on re-ban; filter `status=active` in matching/watcher.
+- **Guard:** `tests/test_reinstatement.py::test_record_ban_reactivates_overturned_row`
+
+### 2026-06-25 — verifier — async tests not counted
+- **Symptom:** `autopilot verify` reported 0 test functions in files using `async def test_`.
+- **Root cause:** `TEST_FUNC_RE` only matched `def test_`.
+- **Fix:** Regex now accepts optional `async` prefix.
+- **Guard:** `orchestrator/verifier.py`
+
 ---

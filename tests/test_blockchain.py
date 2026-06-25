@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from singulr.config import Settings
+from singulr.domain.ban_taxonomy import BanCategory, BanSeverity
 from singulr.services.blockchain import ChainClient
 
 
@@ -39,6 +40,51 @@ async def test_is_banned_returns_true_when_contract_says_so() -> None:
 
     assert banned is True
     mock_contract.functions.isBanned.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_get_reputation_returns_score_and_active_bans() -> None:
+    """get_reputation maps contract tuple to score and active_bans."""
+    fingerprint = "0x" + "ef" * 32
+    settings = Settings(
+        contract_address="0x1234567890123456789012345678901234567890",
+        wallet_private_key="0x" + "2" * 64,
+    )
+    mock_contract = MagicMock()
+    mock_contract.functions.getReputation.return_value.call.return_value = (150, 2)
+
+    with patch("singulr.services.blockchain.get_settings", return_value=settings):
+        client = ChainClient()
+        client._contract = mock_contract
+        result = await client.get_reputation(fingerprint)
+
+    assert result == {"score": 150, "active_bans": 2}
+    mock_contract.functions.getReputation.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_record_ban_passes_category_and_severity_to_contract() -> None:
+    """record_ban forwards taxonomy ordinals to the chain client."""
+    settings = Settings(
+        contract_address="0x1234567890123456789012345678901234567890",
+        wallet_private_key="0x" + "3" * 64,
+    )
+    mock_contract = MagicMock()
+    record_fn = MagicMock()
+    mock_contract.functions.recordBan.return_value = record_fn
+
+    with patch("singulr.services.blockchain.get_settings", return_value=settings):
+        client = ChainClient()
+        client._contract = mock_contract
+        await client.record_ban(
+            "0x" + "11" * 32,
+            None,
+            42,
+            category=BanCategory.SCAM_FRAUD,
+            severity=BanSeverity.PERMANENT,
+        )
+
+    mock_contract.functions.recordBan.assert_called_once()
 
 
 @pytest.mark.asyncio

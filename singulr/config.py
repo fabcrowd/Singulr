@@ -40,6 +40,9 @@ class Settings(BaseSettings):
     local_similarity_flag_threshold: float = 0.85
     default_security_preset: str = "balanced"
     default_network_registry_mode: str = "read"
+    ban_decay_months: int = 6
+
+    trusted_channel_ids: str = ""
 
     admin_api_key: str = ""
     admin_telegram_id: int = 0
@@ -56,6 +59,13 @@ class Settings(BaseSettings):
     def bot_configured(self) -> bool:
         """True when Telegram bot token is set."""
         return bool(self.bot_token)
+
+    @property
+    def trusted_channel_id_list(self) -> list[int]:
+        """Parsed TRUSTED_CHANNEL_IDS comma-separated list."""
+        if not self.trusted_channel_ids.strip():
+            return []
+        return [int(part.strip()) for part in self.trusted_channel_ids.split(",") if part.strip()]
 
 
 @lru_cache

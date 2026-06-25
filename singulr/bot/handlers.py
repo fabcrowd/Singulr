@@ -58,8 +58,15 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     if not settings.channel_id:
         await update.message.reply_text("Singulr is not fully configured yet.")
         return
-    async with SessionLocal() as session:
-        token = await create_token(session, update.effective_user.id, settings.channel_id)
+    try:
+        async with SessionLocal() as session:
+            token = await create_token(session, update.effective_user.id, settings.channel_id)
+    except TokenRateLimitError:
+        await update.message.reply_text(
+            "You have requested too many verification links today. "
+            "Please try again later or contact the channel admin."
+        )
+        return
     url = f"{settings.public_base_url.rstrip('/')}/verify?token={token}"
     await update.message.reply_text(f"Tap to verify:\n{url}")
 
