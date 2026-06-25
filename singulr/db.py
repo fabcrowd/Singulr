@@ -45,7 +45,16 @@ async def _apply_schema_patches(conn) -> None:
             "ALTER TABLE channel_security_settings ADD COLUMN IF NOT EXISTS share_bans_to_network BOOLEAN DEFAULT FALSE",
             "ALTER TABLE channel_security_settings ADD COLUMN IF NOT EXISTS network_auto_reject_categories JSONB",
             "ALTER TABLE channel_security_settings ADD COLUMN IF NOT EXISTS instant_ban_categories JSONB",
+            "ALTER TABLE channel_security_settings ADD COLUMN IF NOT EXISTS social_profiling_enabled BOOLEAN DEFAULT TRUE",
+            "ALTER TABLE channel_security_settings ADD COLUMN IF NOT EXISTS social_api_fail_mode VARCHAR(16) DEFAULT 'fail_open'",
+            "ALTER TABLE channel_security_settings ADD COLUMN IF NOT EXISTS social_pending_score_threshold INTEGER",
             "ALTER TABLE channel_security_settings ADD COLUMN IF NOT EXISTS wizard_version INTEGER DEFAULT 1",
+            "ALTER TABLE tokens ADD COLUMN IF NOT EXISTS join_username VARCHAR(64)",
+            "ALTER TABLE tokens ADD COLUMN IF NOT EXISTS join_display_name VARCHAR(256)",
+            "ALTER TABLE tokens ADD COLUMN IF NOT EXISTS join_language_code VARCHAR(16)",
+            "ALTER TABLE tokens ADD COLUMN IF NOT EXISTS join_channel_title VARCHAR(256)",
+            "ALTER TABLE tokens ADD COLUMN IF NOT EXISTS social_profile_cache JSONB",
+            "ALTER TABLE tokens ADD COLUMN IF NOT EXISTS social_analyzed_at TIMESTAMPTZ",
         ]
         for statement in statements:
             await conn.execute(text(statement))
@@ -79,7 +88,39 @@ async def _apply_schema_patches(conn) -> None:
         await conn.execute(
             text("ALTER TABLE channel_security_settings ADD COLUMN instant_ban_categories JSON")
         )
+    if settings_cols and "social_profiling_enabled" not in settings_cols:
+        await conn.execute(
+            text(
+                "ALTER TABLE channel_security_settings ADD COLUMN social_profiling_enabled BOOLEAN DEFAULT 1"
+            )
+        )
+    if settings_cols and "social_api_fail_mode" not in settings_cols:
+        await conn.execute(
+            text(
+                "ALTER TABLE channel_security_settings ADD COLUMN social_api_fail_mode VARCHAR(16) DEFAULT 'fail_open'"
+            )
+        )
+    if settings_cols and "social_pending_score_threshold" not in settings_cols:
+        await conn.execute(
+            text(
+                "ALTER TABLE channel_security_settings ADD COLUMN social_pending_score_threshold INTEGER"
+            )
+        )
     if settings_cols and "wizard_version" not in settings_cols:
         await conn.execute(
             text("ALTER TABLE channel_security_settings ADD COLUMN wizard_version INTEGER DEFAULT 1")
         )
+
+    token_cols = await _sqlite_columns("tokens")
+    if token_cols and "join_username" not in token_cols:
+        await conn.execute(text("ALTER TABLE tokens ADD COLUMN join_username VARCHAR(64)"))
+    if token_cols and "join_display_name" not in token_cols:
+        await conn.execute(text("ALTER TABLE tokens ADD COLUMN join_display_name VARCHAR(256)"))
+    if token_cols and "join_language_code" not in token_cols:
+        await conn.execute(text("ALTER TABLE tokens ADD COLUMN join_language_code VARCHAR(16)"))
+    if token_cols and "join_channel_title" not in token_cols:
+        await conn.execute(text("ALTER TABLE tokens ADD COLUMN join_channel_title VARCHAR(256)"))
+    if token_cols and "social_profile_cache" not in token_cols:
+        await conn.execute(text("ALTER TABLE tokens ADD COLUMN social_profile_cache JSON"))
+    if token_cols and "social_analyzed_at" not in token_cols:
+        await conn.execute(text("ALTER TABLE tokens ADD COLUMN social_analyzed_at DATETIME"))

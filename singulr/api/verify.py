@@ -194,6 +194,7 @@ async def precheck(
         ip_hash=ip_hash,
         channel_id=token_row.channel_id,
         policy=policy,
+        token_row=token_row,
     )
 
     if result.decision == Decision.BLOCK:
@@ -246,6 +247,7 @@ async def submit(
         env_flags=env_flags,
         channel_id=token_row.channel_id,
         policy=policy,
+        token_row=token_row,
     )
 
     await mark_token_used(session, body.token)

@@ -10,7 +10,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from singulr.config import get_settings
-from singulr.models import Ban, IPSession, Profile
+from singulr.models import Ban, IPSession, Profile, VerificationToken
 from singulr.services.blockchain import ChainClient
 from singulr.services.channel_policy import (
     DEFAULT_INSTANT_BAN_CATEGORIES,
@@ -24,7 +24,11 @@ from singulr.services.network_reputation import (
     network_decision_from_score,
 )
 from singulr.services.reinstatement import is_ban_blocking
-from singulr.services.social_profile import get_social_profile_provider
+from singulr.services.social_profile import (
+    SocialProfileContext,
+    SocialProfileProviderError,
+    analyze_social_profile,
+)
 from singulr.services.stylometry import stylometry_similarity
 
 ENV_ANOMALY_RISK = 20
@@ -88,6 +92,9 @@ async def _resolve_effective_policy(
         share_bans_to_network=False,
         network_auto_reject_categories=list(DEFAULT_NETWORK_AUTO_REJECT),
         instant_ban_categories=list(DEFAULT_INSTANT_BAN_CATEGORIES),
+        social_profiling_enabled=settings.default_social_profiling_enabled,
+        social_api_fail_mode=settings.default_social_api_fail_mode,
+        social_pending_score_threshold=settings.default_social_pending_score_threshold,
         admin_ops_chat_id=settings.log_channel_id or None,
     )
 
@@ -150,6 +157,8 @@ async def check_known_bad(
     env_flags: dict | None = None,
     channel_id: int | None = None,
     policy: EffectivePolicy | None = None,
+    token_row: VerificationToken | None = None,
+    social_context: SocialProfileContext | None = None,
 ) -> MatchResult:
     """Run tiered checks: exact bans, chain, IP flag, env anomaly, keystroke/stylometry."""
     effective_policy = await _resolve_effective_policy(
@@ -297,7 +306,34 @@ async def check_known_bad(
         if evasion is not None:
             return evasion
 
-    social = await get_social_profile_provider().analyze(telegram_user_id=telegram_user_id)
+    if token_row:
+        ctx = SocialProfileContext(
+            telegram_user_id=telegram_user_id,
+            channel_id=channel_id or effective_policy.channel_id,
+            username=token_row.join_username,
+            display_name=token_row.join_display_name,
+            language_code=token_row.join_language_code,
+            channel_title=token_row.join_channel_title,
+            verify_token=token_row.token,
+        )
+    else:
+        ctx = social_context or SocialProfileContext(
+            telegram_user_id=telegram_user_id,
+            channel_id=channel_id or effective_policy.channel_id,
+        )
+    try:
+        social = await analyze_social_profile(
+            session,
+            ctx,
+            policy=effective_policy,
+            token_row=token_row,
+        )
+    except SocialProfileProviderError:
+        return MatchResult(
+            Decision.PENDING,
+            "Social profile check unavailable",
+            factors + ["social_provider_error"],
+        )
     if social.hard_categories:
         for category in social.hard_categories:
             if category in effective_policy.instant_ban_categories:
@@ -307,11 +343,10 @@ async def check_known_bad(
                     f"Social profile — {category}",
                     factors,
                 )
-    if social.soft_signals or social.risk_score >= 40:
+    if social.risk_score >= effective_policy.social_pending_score_threshold:
         for signal in social.soft_signals:
             factors.append(f"social_soft:{signal}")
-        if social.risk_score:
-            factors.append(f"social_score:{social.risk_score}")
+        factors.append(f"social_score:{social.risk_score}")
         return MatchResult(
             Decision.PENDING,
             "Social profile review",

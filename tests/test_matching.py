@@ -50,6 +50,9 @@ _DEFAULT_POLICY = EffectivePolicy(
     share_bans_to_network=False,
     network_auto_reject_categories=["scam_fraud", "raid_coordination"],
     instant_ban_categories=["impersonation", "bot_abuse"],
+    social_profiling_enabled=True,
+    social_api_fail_mode="fail_open",
+    social_pending_score_threshold=40,
     admin_ops_chat_id=None,
 )
 

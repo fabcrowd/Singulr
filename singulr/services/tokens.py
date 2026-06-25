@@ -52,6 +52,11 @@ async def create_token(
     session: AsyncSession,
     telegram_user_id: int,
     channel_id: int,
+    *,
+    join_username: str | None = None,
+    join_display_name: str | None = None,
+    join_language_code: str | None = None,
+    join_channel_title: str | None = None,
 ) -> str:
     """Create a single-use verification token."""
     if await _count_recent_tokens(session, telegram_user_id) >= MAX_TOKENS_PER_USER_PER_24H:
@@ -70,6 +75,10 @@ async def create_token(
         channel_id=channel_id,
         expires_at=expires,
         used=False,
+        join_username=join_username,
+        join_display_name=join_display_name,
+        join_language_code=join_language_code,
+        join_channel_title=join_channel_title,
     )
     session.add(row)
     await session.commit()

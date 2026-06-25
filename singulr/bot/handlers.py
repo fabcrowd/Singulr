@@ -36,8 +36,9 @@ from singulr.services.telegram_actions import (
     restrict_member,
     send_verification_dm,
 )
+from singulr.services.channel_policy import get_effective_channel_policy
 from singulr.services.reverification import require_reverification
-from singulr.services.social_profile import get_social_profile_provider
+from singulr.services.social_profile import SocialProfileContext, analyze_social_profile
 from singulr.services.tokens import TokenRateLimitError, create_token
 from sqlalchemy import select
 from singulr.services.watcher import find_watcher_matches
@@ -135,9 +136,20 @@ async def on_join_request(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     except Exception as exc:  # noqa: BLE001
         logger.warning("Could not restrict member: %s", exc)
 
+    title = await get_channel_title(context.application, channel_id)
+    display_name = " ".join(part for part in (user.first_name, user.last_name) if part)
+
     try:
         async with SessionLocal() as session:
-            token = await create_token(session, user.id, channel_id)
+            token = await create_token(
+                session,
+                user.id,
+                channel_id,
+                join_username=user.username,
+                join_display_name=display_name or None,
+                join_language_code=user.language_code,
+                join_channel_title=title,
+            )
     except TokenRateLimitError:
         try:
             await context.application.bot.send_message(
@@ -151,7 +163,6 @@ async def on_join_request(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             logger.warning("Could not DM rate-limited user %s: %s", user.id, exc)
         return
 
-    title = await get_channel_title(context.application, channel_id)
     url = f"{settings.public_base_url.rstrip('/')}/verify?token={token}"
     try:
         await send_verification_dm(context.application, user.id, url, title)
@@ -229,20 +240,59 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     elif data.startswith("details_"):
         channel_id, user_id = _parse_channel_user_callback(data.removeprefix("details_"))
         fingerprint_hash = None
+        social_summary = None
+        social_signals: list[str] = []
+        social_sources: list[str] = []
         async with SessionLocal() as session:
             profile = await session.scalar(
                 select(Profile).where(Profile.telegram_user_id == user_id)
             )
             if profile:
                 fingerprint_hash = profile.fingerprint_hash
+            policy = await get_effective_channel_policy(session, channel_id)
+            ctx = SocialProfileContext(
+                telegram_user_id=user_id,
+                channel_id=channel_id,
+            )
+            try:
+                member = await context.application.bot.get_chat_member(channel_id, user_id)
+                user = member.user
+                ctx = SocialProfileContext(
+                    telegram_user_id=user_id,
+                    channel_id=channel_id,
+                    username=user.username,
+                    display_name=" ".join(
+                        part for part in (user.first_name, user.last_name) if part
+                    )
+                    or None,
+                    language_code=user.language_code,
+                    channel_title=await get_channel_title(context.application, channel_id),
+                )
+            except Exception:  # noqa: BLE001
+                pass
+            try:
+                social = await analyze_social_profile(
+                    session,
+                    ctx,
+                    policy=policy,
+                    refresh=False,
+                )
+                await session.commit()
+            except Exception:  # noqa: BLE001
+                social = None
+            if social:
+                social_summary = social.summary or None
+                social_signals = list(social.soft_signals)
+                social_sources = list(social.sources)
         ban_history = await _ban_history_for_fingerprint(fingerprint_hash)
-        social = await get_social_profile_provider().analyze(telegram_user_id=user_id)
         body = await format_admin_profile_details(
             context.application,
             user_id=user_id,
             channel_id=channel_id,
             ban_history=ban_history,
-            social_summary=social.summary or None,
+            social_summary=social_summary,
+            social_signals=social_signals,
+            social_sources=social_sources,
         )
         if query.message:
             await query.message.reply_text(body)

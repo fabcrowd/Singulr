@@ -81,6 +81,26 @@ async def test_create_token_rate_limit_blocks_fourth_within_24h(db_session: Asyn
 
 
 @pytest.mark.asyncio
+async def test_create_token_stores_join_snapshot(db_session: AsyncSession) -> None:
+    """Join-time Telegram fields are persisted on the token row."""
+    token = await create_token(
+        db_session,
+        telegram_user_id=99,
+        channel_id=42,
+        join_username="joiner",
+        join_display_name="Test User",
+        join_language_code="en",
+        join_channel_title="My Channel",
+    )
+    row = await validate_token(db_session, token)
+    assert row is not None
+    assert row.join_username == "joiner"
+    assert row.join_display_name == "Test User"
+    assert row.join_language_code == "en"
+    assert row.join_channel_title == "My Channel"
+
+
+@pytest.mark.asyncio
 async def test_create_token_invalidates_previous_unused_token(db_session: AsyncSession) -> None:
     """A new token marks prior unused tokens for the same user as used."""
     user_id = 42_002

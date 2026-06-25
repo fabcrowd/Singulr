@@ -23,6 +23,16 @@ class VerificationToken(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     used: Mapped[bool] = mapped_column(Boolean, default=False)
+    join_username: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    join_display_name: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    join_language_code: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    join_channel_title: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    social_profile_cache: Mapped[dict[str, Any] | None] = mapped_column(
+        JSON().with_variant(JSONB, "postgresql"), nullable=True
+    )
+    social_analyzed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
 
 class Profile(Base):
@@ -132,6 +142,11 @@ class ChannelSecuritySettings(Base):
     instant_ban_categories: Mapped[list[str] | None] = mapped_column(
         JSON().with_variant(JSONB, "postgresql"), nullable=True
     )
+    social_profiling_enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1")
+    social_api_fail_mode: Mapped[str] = mapped_column(
+        String(16), default="fail_open", server_default="fail_open"
+    )
+    social_pending_score_threshold: Mapped[int | None] = mapped_column(Integer, nullable=True)
     admin_ops_chat_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     wizard_completed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True

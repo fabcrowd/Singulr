@@ -21,6 +21,8 @@ async def test_missing_row_uses_balanced_config_defaults(db_session: AsyncSessio
     assert policy.local_similarity_flag_threshold == 0.85
     assert policy.network_registry_mode == "read"
     assert policy.instant_ban_categories == ["impersonation", "bot_abuse"]
+    assert policy.social_profiling_enabled is True
+    assert policy.social_api_fail_mode == "fail_open"
     assert policy.admin_ops_chat_id is None
 
 
@@ -60,6 +62,9 @@ def test_effective_policy_field_types() -> None:
         share_bans_to_network=False,
         network_auto_reject_categories=["scam_fraud", "raid_coordination"],
         instant_ban_categories=["impersonation", "bot_abuse"],
+        social_profiling_enabled=True,
+        social_api_fail_mode="fail_open",
+        social_pending_score_threshold=40,
         admin_ops_chat_id=None,
     )
 

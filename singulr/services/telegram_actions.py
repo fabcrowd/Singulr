@@ -405,6 +405,8 @@ async def format_admin_profile_details(
     risk_factors: list[str] | None = None,
     ban_history: str | None = None,
     social_summary: str | None = None,
+    social_signals: list[str] | None = None,
+    social_sources: list[str] | None = None,
 ) -> str:
     """Build expanded admin-only profile message."""
     lines = [f"User ID: {user_id}", f"Channel ID: {channel_id}"]
@@ -422,6 +424,10 @@ async def format_admin_profile_details(
         lines.append(f"Risk factors: {', '.join(risk_factors)}")
     if social_summary:
         lines.append(f"Social profile: {social_summary}")
+    if social_signals:
+        lines.append(f"Social signals: {', '.join(social_signals)}")
+    if social_sources:
+        lines.append(f"Sources: {', '.join(social_sources)}")
     if ban_history:
         lines.append(f"\nPrior bans:\n{ban_history}")
     return "\n".join(lines)

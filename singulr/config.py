@@ -44,6 +44,9 @@ class Settings(BaseSettings):
     social_profile_provider: str = "none"
     mock_social_hard_user_ids: str = ""
     mock_social_soft_user_ids: str = ""
+    default_social_profiling_enabled: bool = True
+    default_social_api_fail_mode: str = "fail_open"
+    default_social_pending_score_threshold: int = 40
 
     trusted_channel_ids: str = ""
 
