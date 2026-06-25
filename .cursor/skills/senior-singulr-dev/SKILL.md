@@ -270,14 +270,26 @@ Windows path: `C:\Users\daroo\repos\Telegram bot`
 - **Loop tick / blocked / production-ready:** post **HANDOFF_SUMMARY** per `REPO_LEAD_LOOP_PROMPT.md` (work done + questions for owner). No summaries between reqs in the same turn.
 - No engagement bait; do not ask “want me to continue?” mid-backlog — **you would be fired for clocking out with 9/14 reqs pending**.
 
+## Away mode (owner offline — read this)
+
+**Triggers:** “run while I’m away”, overnight, handoff, walk away, keep shipping, `/loop … handoff`, or `start-repo-lead.ps1` paste.
+
+The owner should **not** need to mention `notify_on_output`, monitored shells, or autopilot CLI steps. **You** follow `.cursor/rules/away-mode.mdc` automatically.
+
+### Away-mode checklist (same turn)
+
+1. `verify.ps1` → `autopilot status` → `autopilot next` if eligible  
+2. **Implement** (do not stop at “loop armed”)  
+3. Arm **Cursor Shell** background loop: sentinel `AGENT_LOOP_TICK_REPO_LEAD`, `notify_on_output` pattern `^AGENT_LOOP_TICK_REPO_LEAD`, default **30m**  
+4. **Never** use hidden `Start-Process` or `overnight-autopilot-loop.ps1` as a substitute for the Cursor loop  
+5. **Never** confuse **Singulr GitHub Sync** (hourly git push) with dev agent work  
+
+On each tick: status → one iteration or grind → `HANDOFF_SUMMARY`. Questions → **Owner review** table in `*-notes.md`; keep shipping.
+
 ## Overnight handoff
 
-Human starts: `.\scripts\start-repo-lead.ps1` (runtime-aware paste for Cursor or Claude Code).
+Human may run: `.\scripts\start-repo-lead.ps1` — prints paste for a new Agent chat. **You** still must arm the Cursor loop per away-mode above.
 
-Optional ticker:
+`overnight-autopilot-loop.ps1` is **log-only** (optional audit trail). It does **not** wake Agent. Do not use it instead of the Cursor loop.
 
-```powershell
-.\scripts\overnight-autopilot-loop.ps1 -TaskSlug network-trust-registry -IntervalMinutes 45
-```
-
-Done signals: **`SINGULR_PRODUCTION_READY`** per `docs/PRODUCTION_READINESS.md` (not “task file empty”). Legacy `REPO_LEAD_SESSION_COMPLETE` only if you intentionally alias it after the production checklist passes.
+Done signals: **`SINGULR_PRODUCTION_READY`** per `docs/PRODUCTION_READINESS.md` (not “task file empty”).

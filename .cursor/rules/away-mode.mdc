@@ -1,0 +1,58 @@
+---
+description: Owner away / overnight / handoff — autonomous repo-lead without extra instructions
+alwaysApply: true
+---
+
+# Away mode (owner offline)
+
+When the owner says they are leaving, want the bot to **run while away**, **overnight**, **handoff**, **keep shipping**, or uses **`/loop`** with a handoff prompt — you are in **away mode**. Do not ask them to specify loop mechanics, terminal monitoring, or autopilot steps.
+
+## What away mode means
+
+The owner expects: **code keeps shipping** until `SINGULR_PRODUCTION_READY` or `REPO_LEAD_BLOCKED`. They are **not** asking for git sync only, log-only tickers, or a summary and stop.
+
+## Same turn (mandatory, in order)
+
+1. Read `.cursor/skills/senior-singulr-dev/SKILL.md` and `docs/PRODUCTION_READINESS.md`.
+2. `powershell -File scripts\verify.ps1` → `python -m orchestrator autopilot status` → `autopilot next` if eligible.
+3. **Ship work** — at least one full autopilot iteration (TDD → verify → complete → next) before ending the turn if any req is eligible.
+4. **Arm the real Cursor loop** (see below). Confirm in one sentence what interval you used and that coding runs on ticks.
+5. On tick end / blocked / production-ready: post **HANDOFF_SUMMARY** per `docs/autopilot/REPO_LEAD_LOOP_PROMPT.md`.
+
+## Arm loop (Cursor only — non-negotiable)
+
+Use the **Shell tool** background terminal with **`notify_on_output`**:
+
+- **Pattern:** `^AGENT_LOOP_TICK_REPO_LEAD`
+- **Sentinel:** `AGENT_LOOP_TICK_REPO_LEAD {"prompt":"…"}` (JSON payload with handoff instructions)
+- **Interval:** default **30m** unless owner gave another (`/loop 45m`, etc.)
+- Run the handoff prompt **once immediately** after arming; first sentinel after `Start-Sleep`.
+
+**PowerShell loop body (adapt interval seconds):**
+
+```powershell
+while ($true) {
+  Start-Sleep -Seconds 1800
+  Write-Output 'AGENT_LOOP_TICK_REPO_LEAD {"prompt":"Away tick: senior-singulr-dev. autopilot status→next→TDD→verify.ps1→complete→next. Owner review table for questions; keep shipping. HANDOFF_SUMMARY at tick end."}'
+}
+```
+
+Track the shell task id so the owner can ask you to stop the loop.
+
+## Forbidden (these caused false “it ran all day”)
+
+| Do NOT | Why |
+|--------|-----|
+| `Start-Process powershell -WindowStyle Hidden` for the loop | Cursor cannot monitor it — **agent never wakes** |
+| `overnight-autopilot-loop.ps1` **instead of** Cursor loop | Log-only; **does not wake Agent** (stated in `REPO_LEAD_LOOP_PROMPT.md`) |
+| Treat **Singulr GitHub Sync** scheduled task as dev progress | Only commits/pushes files hourly — **no coding** |
+| End turn after arming loop **without** shipping a req when one was eligible | Owner asked for work, not just a timer |
+| Stop when autopilot has pending reqs | Unacceptable unless production-ready or blocked |
+
+## Owner review (non-blocking)
+
+Log open product questions in `docs/autopilot/<pack>/*-notes.md` § Owner review; **keep implementing** with documented assumptions.
+
+## Optional helper (owner machine)
+
+`.\scripts\start-repo-lead.ps1` prints a paste-ready Agent command — still requires **this** away-mode loop arming in Cursor.

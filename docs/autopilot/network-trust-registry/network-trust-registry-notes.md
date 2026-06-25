@@ -177,6 +177,8 @@
 
 - [2026-06-25] Completed req 6 — ban callback two-step flow (`ban_flow.py`, category → severity → `record_ban` with enums); tests/test_ban_callback.py.
 
+- [2026-06-25] Completed req 7 — `/security` wizard (`security_wizard.py`, preset/evasion/ops flow, `wizard_completed_at`); tests/test_security_wizard.py.
+
 - [2026-06-25 11:40 UTC] Assigned req 6 to Cursor (NEXT_TASK)
 
 - [2026-06-25 11:41 UTC] Assigned req 6 to Cursor (NEXT_TASK)
@@ -186,3 +188,17 @@
 - [2026-06-25 11:41 UTC] Assigned req 6 to Cursor (NEXT_TASK)
 
 - [2026-06-25 11:41 UTC] Completed req 6
+
+- [2026-06-25 17:15 UTC] Assigned req 7 to Cursor (NEXT_TASK)
+
+- [2026-06-25 17:15 UTC] Assigned req 7 to Cursor (NEXT_TASK)
+
+- [2026-06-25 17:17 UTC] Assigned req 7 to Cursor (NEXT_TASK)
+
+- [2026-06-25 17:18 UTC] Assigned req 7 to Cursor (NEXT_TASK)
+
+- [2026-06-25 17:18 UTC] Assigned req 7 to Cursor (NEXT_TASK)
+
+- [2026-06-25 17:18 UTC] Assigned req 7 to Cursor (NEXT_TASK)
+
+- [2026-06-25 17:18 UTC] Completed req 7

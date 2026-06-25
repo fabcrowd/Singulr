@@ -109,3 +109,7 @@ class ChannelSecuritySettings(Base):
     local_similarity_flag_threshold: Mapped[float | None] = mapped_column(Float, nullable=True)
     network_registry_mode: Mapped[str] = mapped_column(String(16), default="read")
     admin_ops_chat_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    wizard_completed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    wizard_version: Mapped[int] = mapped_column(Integer, default=1)

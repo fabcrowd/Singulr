@@ -1,10 +1,28 @@
 # Repo lead loop (overnight / handoff)
 
+## For the owner (plain language)
+
+**“Run while I’m away”** means the Agent should **keep writing and merging code** (autopilot reqs, tests green), not just sync files to GitHub.
+
+You do **not** need to say: monitored terminal, `notify_on_output`, `AGENT_LOOP_TICK`, etc. Say something like:
+
+> Run while I’m away — ship until production-ready.
+
+Or run `.\scripts\start-repo-lead.ps1` and paste into Agent. The Agent must follow **`.cursor/rules/away-mode.mdc`**.
+
+| Automation | What it does | Ships features? |
+|------------|--------------|-----------------|
+| **Cursor `/loop` + away-mode rule** | Wakes **this** Agent chat on a timer | **Yes** |
+| **Singulr GitHub Sync** (Windows task) | Hourly commit/push if files changed | **No** (sync only) |
+| **`overnight-autopilot-loop.ps1`** | Appends lines to a log file | **No** (does not wake Agent) |
+
+---
+
 Copy the **LOOP PROMPT** into a **new Cursor Agent** chat. Enable **auto-run terminal commands**. Read skill: **`senior-singulr-dev`** (`.cursor/skills/senior-singulr-dev/SKILL.md`).
 
-**Overnight / long runs:** use Cursor **`/loop`** (read `.cursor/skills-cursor/loop/SKILL.md` or user **loop** skill): background shell + `AGENT_LOOP_TICK_*` + `notify_on_output`. Run the LOOP PROMPT once immediately, then again on each tick.
+**Overnight / long runs:** Cursor **`/loop`** — Agent arms a **monitored** background shell (`AGENT_LOOP_TICK_REPO_LEAD` + `notify_on_output`). See `.cursor/rules/away-mode.mdc`. Run the LOOP PROMPT once immediately, then again on each tick.
 
-Optional log-only ticker (does **not** wake Agent by itself):
+Log-only ticker (optional audit; **does not** wake Agent):
 
 ```powershell
 cd "C:\Users\daroo\repos\Telegram bot"

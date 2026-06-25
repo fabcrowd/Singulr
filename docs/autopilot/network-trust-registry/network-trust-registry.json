@@ -429,7 +429,7 @@
         "wizard_completed_at set on confirm",
         "Effective policy changes verify behavior in integration test"
       ],
-      "passes": false
+      "passes": true
     },
     {
       "id": "8",

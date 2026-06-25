@@ -73,9 +73,9 @@ if ($activeRuntime -eq "claude-code") {
     $targetLabel = "CLAUDE CODE"
 } else {
     $agentCommand = (
-        "/loop ${LoopMinutes}m IT handoff (Cursor): Read .cursor/skills/senior-singulr-dev/SKILL.md. " +
+        "Run while I'm away — you are ""it"" (senior dev). Ship until SINGULR_PRODUCTION_READY. " +
+        "Follow .cursor/rules/away-mode.mdc and senior-singulr-dev skill (no extra loop instructions needed). " +
         $common + " " +
-        "Arm /loop per loop skill (background shell + AGENT_LOOP_TICK + notify_on_output). " +
         "Enable auto-run terminal commands."
     )
     $targetLabel = "CURSOR AGENT"
@@ -91,7 +91,8 @@ Write-Host ""
 Write-Host "Runtime:      $activeRuntime (scripts\set-agent-runtime.ps1)" -ForegroundColor DarkGray
 Write-Host "Guide:        docs\AGENT_RUNTIME.md" -ForegroundColor DarkGray
 Write-Host "Handoff file: tasks\REPO_LEAD_HANDOFF.txt" -ForegroundColor DarkGray
-Write-Host "Stop loop:    .\scripts\stop-overnight-loop.ps1" -ForegroundColor DarkGray
+Write-Host "Stop loop:    ask Agent to stop AGENT_LOOP_TICK_REPO_LEAD shell (not github sync)" -ForegroundColor DarkGray
+Write-Host "Note:         Singulr GitHub Sync task only pushes git — it does not code." -ForegroundColor DarkYellow
 Write-Host ""
 
 $outPath = Join-Path $RepoRoot "tasks\REPO_LEAD_AGENT_COMMAND.txt"

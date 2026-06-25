@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import UTC, datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -55,4 +56,78 @@ async def get_effective_channel_policy(
         ),
         network_registry_mode=row.network_registry_mode,
         admin_ops_chat_id=row.admin_ops_chat_id,
+    )
+
+
+@dataclass(frozen=True)
+class PresetBundle:
+    """Threshold bundle for a security preset."""
+
+    security_preset: str
+    ban_evasion_auto_deny_threshold: float
+    local_similarity_flag_threshold: float
+    network_registry_mode: str
+
+
+PRESET_BUNDLES: dict[str, PresetBundle] = {
+    "open": PresetBundle("open", 0.95, 0.90, "off"),
+    "balanced": PresetBundle("balanced", 0.92, 0.85, "read"),
+    "strict": PresetBundle("strict", 0.88, 0.78, "read"),
+}
+
+# Evasion strictness tweaks applied on top of the chosen preset.
+EVASION_ADJUSTMENTS: dict[str, tuple[float, float]] = {
+    "high_only": (0.0, 0.0),
+    "flag_medium": (-0.02, -0.03),
+    "review_most": (-0.04, -0.08),
+}
+
+
+def resolve_wizard_thresholds(preset: str, evasion_mode: str) -> PresetBundle:
+    """Combine preset bundle with ban-evasion strictness selection."""
+    bundle = PRESET_BUNDLES.get(preset, PRESET_BUNDLES["balanced"])
+    auto_delta, flag_delta = EVASION_ADJUSTMENTS.get(evasion_mode, (0.0, 0.0))
+    return PresetBundle(
+        security_preset=bundle.security_preset,
+        ban_evasion_auto_deny_threshold=max(0.5, bundle.ban_evasion_auto_deny_threshold + auto_delta),
+        local_similarity_flag_threshold=max(0.5, bundle.local_similarity_flag_threshold + flag_delta),
+        network_registry_mode=bundle.network_registry_mode,
+    )
+
+
+async def upsert_channel_security_settings(
+    session: AsyncSession,
+    *,
+    channel_id: int,
+    preset: str,
+    evasion_mode: str,
+    admin_ops_chat_id: int | None,
+) -> ChannelSecuritySettings:
+    """Create or update channel policy from wizard answers."""
+    resolved = resolve_wizard_thresholds(preset, evasion_mode)
+    row = await session.get(ChannelSecuritySettings, channel_id)
+    if row is None:
+        row = ChannelSecuritySettings(channel_id=channel_id)
+        session.add(row)
+    row.security_preset = resolved.security_preset
+    row.ban_evasion_auto_deny_threshold = resolved.ban_evasion_auto_deny_threshold
+    row.local_similarity_flag_threshold = resolved.local_similarity_flag_threshold
+    row.network_registry_mode = resolved.network_registry_mode
+    row.admin_ops_chat_id = admin_ops_chat_id
+    row.wizard_completed_at = datetime.now(UTC)
+    row.wizard_version = 1
+    await session.commit()
+    await session.refresh(row)
+    return row
+
+
+def format_policy_summary(row: ChannelSecuritySettings) -> str:
+    """Human-readable summary for wizard confirmation."""
+    ops = row.admin_ops_chat_id if row.admin_ops_chat_id else "(not set)"
+    return (
+        f"Preset: {row.security_preset}\n"
+        f"Auto-deny threshold: {row.ban_evasion_auto_deny_threshold:.2f}\n"
+        f"Flag threshold: {row.local_similarity_flag_threshold:.2f}\n"
+        f"Network registry: {row.network_registry_mode}\n"
+        f"Ops chat: {ops}"
     )

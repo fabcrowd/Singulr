@@ -24,4 +24,10 @@ Failures and patterns the agent must not repeat. Updated automatically on `orche
 - **Fix:** `docs/PRODUCTION_READINESS.md`; stop only at `SINGULR_PRODUCTION_READY`; self-assign when no tasks.
 - **Guard:** senior-singulr-dev skill + REPO_LEAD_LOOP_PROMPT + session-start hook.
 
+### 2026-06-25 — away-mode — loop did not wake agent
+- **Symptom:** Owner thought dev ran all day; only hourly `chore: sync local work` commits; backlog stuck at 7/14.
+- **Root cause:** Agent used `Start-Process -WindowStyle Hidden` for `/loop` instead of Cursor monitored Shell + `notify_on_output`; owner also had Singulr GitHub Sync scheduled task (git only).
+- **Fix:** `.cursor/rules/away-mode.mdc`; senior-singulr-dev away checklist; REPO_LEAD_LOOP_PROMPT owner table; start-repo-lead simplified prompt.
+- **Guard:** Forbidden table in away-mode.mdc; never substitute overnight-autopilot-loop.ps1 or github sync for coding.
+
 ---

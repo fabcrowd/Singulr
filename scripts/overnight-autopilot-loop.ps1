@@ -2,6 +2,9 @@
 .SYNOPSIS
   Background ticker for repo-lead / autopilot overnight sessions.
 
+  WARNING: Log-only. Does NOT wake Cursor Agent. For "run while I'm away", use
+  .cursor/rules/away-mode.mdc (monitored shell + AGENT_LOOP_TICK_REPO_LEAD).
+
 .PARAMETER TaskSlug
   Feature folder name under docs/autopilot/ (e.g. network-trust-registry).
 

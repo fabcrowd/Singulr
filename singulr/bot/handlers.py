@@ -7,6 +7,7 @@ import logging
 from telegram import Update
 from telegram.ext import Application, CallbackQueryHandler, ChatJoinRequestHandler, CommandHandler, ContextTypes, MessageHandler, filters
 
+from singulr.bot.security_wizard import build_security_wizard_handler
 from singulr.bot.ban_flow import (
     PENDING_BAN_CATEGORY_KEY,
     PENDING_BAN_USER_KEY,
@@ -273,6 +274,7 @@ def build_bot_application() -> Application:
         raise RuntimeError("BOT_TOKEN is required")
 
     app = Application.builder().token(settings.bot_token).build()
+    app.add_handler(build_security_wizard_handler())
     app.add_handler(CommandHandler("start", start_command))
     app.add_handler(CommandHandler("verify", start_command))
     app.add_handler(CommandHandler("reverify", reverify_command))
