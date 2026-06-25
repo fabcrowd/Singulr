@@ -1,0 +1,48 @@
+{
+  "$schema": "https://raw.githubusercontent.com/Gens-ai/autopilot/main/autopilot.schema.json",
+  "version": "1.0.0",
+  "project": {
+    "type": "python",
+    "conventions": {
+      "testFilePattern": "test_*.py",
+      "testDirectory": "tests",
+      "sourceDirectory": "singulr"
+    }
+  },
+  "feedbackLoops": {
+    "typecheck": {
+      "command": ".venv\\Scripts\\python -m compileall -q singulr orchestrator",
+      "enabled": true
+    },
+    "tests": {
+      "command": ".venv\\Scripts\\pytest -q",
+      "enabled": true,
+      "sandbox": false
+    },
+    "lint": {
+      "command": ".venv\\Scripts\\ruff check singulr tests orchestrator",
+      "enabled": true
+    },
+    "contracts": {
+      "command": "npm run compile --silent",
+      "enabled": true
+    }
+  },
+  "iterations": {
+    "tasks": 15,
+    "tests": 10,
+    "lint": 15,
+    "entropy": 10,
+    "command": 10
+  },
+  "codebase": {
+    "patterns": ["FastAPI", "python-telegram-bot", "SQLAlchemy async", "pytest", "Hardhat"],
+    "architecture": "Singulr: Telegram join verification (Gate) + channel stylometry watcher; optional Adiri chain bans",
+    "dependencies": ["PostgreSQL or SQLite", "FingerprintJS", "Node/Hardhat for contracts"]
+  },
+  "analytics": {
+    "enabled": true,
+    "directory": "docs/autopilot/analytics",
+    "thrashingThreshold": 3
+  }
+}

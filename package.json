@@ -1,0 +1,15 @@
+{
+  "name": "singulr-contracts",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "compile": "hardhat compile",
+    "deploy:adiri": "hardhat run scripts/deploy.js --network adiri",
+    "verify": "hardhat verify --network adiri"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^5.0.0",
+    "dotenv": "^16.4.5",
+    "hardhat": "^2.22.17"
+  }
+}

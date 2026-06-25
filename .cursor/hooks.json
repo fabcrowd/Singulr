@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "hooks": {
+    "sessionStart": [
+      {
+        "command": "node .cursor/hooks/session-start.js"
+      }
+    ],
+    "stop": [
+      {
+        "command": "node .cursor/hooks/stop-verify.js"
+      }
+    ],
+    "afterShellExecution": [
+      {
+        "command": "node .cursor/hooks/capture-shell-failure.js",
+        "matcher": "pytest|ruff|verify\\.ps1|orchestrator verify"
+      }
+    ]
+  }
+}

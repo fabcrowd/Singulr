@@ -1,0 +1,261 @@
+{
+  "project": "singulr",
+  "version": "1.0.0",
+  "completion_promise": "SINGULR_SHIP",
+  "max_iterations_recommended": 25,
+  "goals": [
+    "Goal 1 \u2014 The Gate: catch banned users rejoining on new accounts at verification",
+    "Goal 2 \u2014 The Watcher: stylometry profiles flag members matching banned users"
+  ],
+  "verification_suite": {
+    "description": "Run ALL of these before marking any task done or emitting completion promise",
+    "commands": [
+      {
+        "name": "pytest",
+        "cmd": ".venv\\Scripts\\pytest -q",
+        "required": true
+      },
+      {
+        "name": "ruff",
+        "cmd": ".venv\\Scripts\\ruff check singulr tests",
+        "required": true
+      },
+      {
+        "name": "contracts",
+        "cmd": "npm run compile",
+        "required": true
+      }
+    ]
+  },
+  "loop_rules": [
+    "Read tasks/prd.json and git log --oneline -5 before doing anything",
+    "Pick exactly ONE task with status pending (lowest id first)",
+    "Set that task status to in_progress in prd.json, commit nothing yet",
+    "Implement only what that task describes \u2014 no scope creep",
+    "Run the task verification command, then the full verification_suite",
+    "If verification fails: fix within the same iteration, do not mark done",
+    "If verification passes: set task status to done in prd.json, update tasks/todo.md checkbox if applicable",
+    "Commit with message: singulr(ralph): <task-id> <short title>",
+    "Do NOT output the completion promise until every task is done AND verification_suite passes",
+    "If blocked on secrets (BOT_TOKEN, wallet): mark task blocked, document in prd.json notes, skip to next pending",
+    "Never edit .env with real secrets; only .env.example"
+  ],
+  "tasks": [
+    {
+      "id": "T001",
+      "phase": "test-harness",
+      "title": "Unit tests for known-bad registry matching",
+      "description": "Add tests/test_matching.py covering: exact user_id block, exact fingerprint block, clean approve, keystroke similarity flag above threshold. Use in-memory SQLite async session fixtures.",
+      "acceptance_criteria": [
+        "tests/test_matching.py exists with >= 4 test functions",
+        "pytest tests/test_matching.py passes"
+      ],
+      "verification": ".venv\\Scripts\\pytest tests/test_matching.py -q",
+      "status": "done"
+    },
+    {
+      "id": "T002",
+      "phase": "test-harness",
+      "title": "Unit tests for verification tokens",
+      "description": "Add tests/test_tokens.py: create_token returns usable token, validate_token rejects expired and used tokens, mark_token_used prevents reuse.",
+      "acceptance_criteria": [
+        "tests/test_tokens.py exists with >= 3 test functions",
+        "pytest tests/test_tokens.py passes"
+      ],
+      "verification": ".venv\\Scripts\\pytest tests/test_tokens.py -q",
+      "status": "done"
+    },
+    {
+      "id": "T003",
+      "phase": "test-harness",
+      "title": "API tests for verify precheck and submit",
+      "description": "Add tests/test_api_verify.py using httpx.AsyncClient against singulr.main:app. Mock or skip bot notification. Test precheck blocks when ban exists, submit rejects wrong sentence, submit approves clean user.",
+      "acceptance_criteria": [
+        "tests/test_api_verify.py exists with >= 3 test functions",
+        "pytest tests/test_api_verify.py passes"
+      ],
+      "verification": ".venv\\Scripts\\pytest tests/test_api_verify.py -q",
+      "status": "done"
+    },
+    {
+      "id": "T004",
+      "phase": "test-harness",
+      "title": "Shared pytest fixtures for async DB",
+      "description": "Add tests/conftest.py with session-scoped async SQLite engine, tables created per test, dependency override for get_session in FastAPI tests.",
+      "acceptance_criteria": [
+        "tests/conftest.py exists",
+        "T001-T003 use shared fixtures without duplication"
+      ],
+      "verification": ".venv\\Scripts\\pytest -q",
+      "status": "done"
+    },
+    {
+      "id": "T005",
+      "phase": "test-harness",
+      "title": "Verification script for Ralph iterations",
+      "description": "Add scripts/verify.ps1 (Windows) and scripts/verify.sh that run pytest, ruff, and npm run compile; exit non-zero on any failure.",
+      "acceptance_criteria": [
+        "scripts/verify.ps1 runs all three checks",
+        "Document script in tasks/ralph-loop.md"
+      ],
+      "verification": "powershell -File scripts/verify.ps1",
+      "status": "done"
+    },
+    {
+      "id": "T006",
+      "phase": "gate",
+      "title": "IP session pattern detection",
+      "description": "When same ip_hash verifies 2+ different telegram_user_ids within 24h, return Decision.FLAG with factor ip_velocity. Add tests in test_matching.py.",
+      "acceptance_criteria": [
+        "check_known_bad or helper flags IP velocity",
+        "At least 1 test for multi-account same IP"
+      ],
+      "verification": ".venv\\Scripts\\pytest tests/test_matching.py -q",
+      "status": "done"
+    },
+    {
+      "id": "T007",
+      "phase": "gate",
+      "title": "Rate limit token generation per user",
+      "description": "Max 3 tokens per telegram_user_id per 24h. Reject or reuse logic in create_token. Test in test_tokens.py.",
+      "acceptance_criteria": [
+        "Fourth token within 24h raises or returns error",
+        "Test passes"
+      ],
+      "verification": ".venv\\Scripts\\pytest tests/test_tokens.py -q",
+      "status": "done"
+    },
+    {
+      "id": "T008",
+      "phase": "gate",
+      "title": "Structured log channel messages",
+      "description": "Update log_to_channel in telegram_actions.py: formatted messages for ELEVATED_RISK, BAN_EVASION, WATCHER_MATCH with risk factors and truncated fingerprint hash. Add unit test for message format strings.",
+      "acceptance_criteria": [
+        "Log messages include user id, risk score/factors where applicable",
+        "tests/test_log_format.py passes"
+      ],
+      "verification": ".venv\\Scripts\\pytest tests/test_log_format.py -q",
+      "status": "done"
+    },
+    {
+      "id": "T009",
+      "phase": "gate",
+      "title": "Ban evasion auto-block on exact fingerprint precheck",
+      "description": "Ensure precheck returns allowed:false before page render when fingerprint matches bans table. Integration test in test_api_verify.py.",
+      "acceptance_criteria": [
+        "precheck with banned fingerprint returns allowed false",
+        "Test passes without starting Telegram bot"
+      ],
+      "verification": ".venv\\Scripts\\pytest tests/test_api_verify.py -q",
+      "status": "done"
+    },
+    {
+      "id": "T010",
+      "phase": "watcher",
+      "title": "Stylometry profile accumulation tests",
+      "description": "Test merge_feature_vectors across multiple messages improves similarity between same-author samples vs different-author samples in tests/test_stylometry.py.",
+      "acceptance_criteria": [
+        "Same-author merged vectors similarity > different-author",
+        "pytest passes"
+      ],
+      "verification": ".venv\\Scripts\\pytest tests/test_stylometry.py -q",
+      "status": "done"
+    },
+    {
+      "id": "T011",
+      "phase": "watcher",
+      "title": "Watcher match integration test",
+      "description": "Test find_watcher_matches returns a match when member stylometry closely matches a banned user's profile (seed DB fixtures).",
+      "acceptance_criteria": [
+        "tests/test_watcher.py with seeded bans + stylometry",
+        "find_watcher_matches returns >= 1 match"
+      ],
+      "verification": ".venv\\Scripts\\pytest tests/test_watcher.py -q",
+      "status": "done"
+    },
+    {
+      "id": "T012",
+      "phase": "chain",
+      "title": "Mocked chain client tests",
+      "description": "Add tests/test_blockchain.py mocking Web3: is_banned returns True when contract says so, record_ban skipped when chain disabled.",
+      "acceptance_criteria": [
+        "ChainClient.enabled false when no contract address",
+        "Mocked is_banned test passes"
+      ],
+      "verification": ".venv\\Scripts\\pytest tests/test_blockchain.py -q",
+      "status": "done"
+    },
+    {
+      "id": "T013",
+      "phase": "chain",
+      "title": "Hardhat deploy smoke test script",
+      "description": "Add scripts/smoke-chain.js that connects to CHAIN_RPC, checks chainId 2017, skips deploy if no WALLET_PRIVATE_KEY. Document in README.",
+      "acceptance_criteria": [
+        "node scripts/smoke-chain.js runs without error when RPC reachable",
+        "Prints skip message when wallet not configured"
+      ],
+      "verification": "node scripts/smoke-chain.js",
+      "status": "done"
+    },
+    {
+      "id": "T014",
+      "phase": "frontend",
+      "title": "Verification page environment consistency check",
+      "description": "In static/verify.js detect obvious VM/automation signals (webdriver, headless UA). Send env_flags to submit payload; backend adds +20 risk factor env_anomaly (flag not block). Test backend scoring.",
+      "acceptance_criteria": [
+        "submit accepts env_flags field",
+        "webdriver true adds env_anomaly to risk_factors on flag path",
+        "Test in test_api_verify.py"
+      ],
+      "verification": ".venv\\Scripts\\pytest tests/test_api_verify.py -q",
+      "status": "done"
+    },
+    {
+      "id": "T015",
+      "phase": "frontend",
+      "title": "FingerprintJS Pro API key support",
+      "description": "When FINGERPRINT_PUBLIC_KEY set, load Pro loader; otherwise OSS. Document in README. No regression to precheck flow.",
+      "acceptance_criteria": [
+        "verify.js branches on fingerprint_public_key from precheck",
+        "README mentions Pro vs OSS"
+      ],
+      "verification": ".venv\\Scripts\\pytest -q",
+      "status": "done"
+    },
+    {
+      "id": "T016",
+      "phase": "docs",
+      "title": "E2E manual test checklist",
+      "description": "Add tasks/e2e-checklist.md with step-by-step: join request, DM link, verify page, approve, ban, rejoin block. No code changes required beyond doc.",
+      "acceptance_criteria": [
+        "tasks/e2e-checklist.md exists with >= 10 numbered steps",
+        "Covers ban evasion scenario"
+      ],
+      "verification": "test -f tasks/e2e-checklist.md",
+      "status": "done"
+    },
+    {
+      "id": "T017",
+      "phase": "hardening",
+      "title": "Admin ban writes stylometry hash to chain",
+      "description": "Ensure persist_ban in bans.py always computes stylometry_hash from profile when available. Test ban record includes stylometry_hash in DB.",
+      "acceptance_criteria": [
+        "test in test_matching or test_api confirms stylometry_hash stored on admin ban"
+      ],
+      "verification": ".venv\\Scripts\\pytest -q",
+      "status": "done"
+    },
+    {
+      "id": "T018",
+      "phase": "hardening",
+      "title": "Health endpoint reports component status",
+      "description": "Extend /health to return db_ok, bot_configured, chain_enabled booleans. Test with TestClient.",
+      "acceptance_criteria": [
+        "GET /health returns JSON with those three fields",
+        "test passes"
+      ],
+      "verification": ".venv\\Scripts\\pytest tests/test_health.py -q",
+      "status": "done"
+    }
+  ]
+}

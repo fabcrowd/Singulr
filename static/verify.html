@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Singulr Verification</title>
+  <link rel="stylesheet" href="/static/verify.css" />
+  <script src="https://openfpcdn.io/fingerprintjs/v4/iife.min.js" defer></script>
+</head>
+<body>
+  <main class="card" id="app">
+    <div id="loading" class="state">
+      <div class="spinner"></div>
+      <p>Checking verification link…</p>
+    </div>
+
+    <div id="blocked" class="state hidden">
+      <h1>Unable to verify</h1>
+      <p>This verification link is no longer available. Contact the channel admin if you believe this is an error.</p>
+    </div>
+
+    <div id="form" class="state hidden">
+      <h1>🔒 Singulr Verification</h1>
+      <p class="subtitle">Type the sentence below exactly to join.</p>
+
+      <blockquote id="sentence" class="sentence"></blockquote>
+
+      <textarea
+        id="typed"
+        rows="4"
+        autocomplete="off"
+        autocorrect="off"
+        autocapitalize="off"
+        spellcheck="false"
+        placeholder="Type here…"
+      ></textarea>
+      <p id="match-hint" class="hint"></p>
+
+      <label class="checkbox">
+        <input type="checkbox" id="privacy" />
+        <span>I agree to the <a href="#" id="privacy-link">privacy policy</a> (device signals for fraud prevention).</span>
+      </label>
+
+      <button id="submit" type="button" disabled>Join Singulr</button>
+    </div>
+
+    <div id="success" class="state hidden">
+      <h1>You're verified ✓</h1>
+      <p>Opening Telegram…</p>
+    </div>
+
+    <div id="error" class="state hidden">
+      <h1>Unable to verify</h1>
+      <p id="error-text">Something went wrong. Try requesting a new link from the bot.</p>
+    </div>
+  </main>
+
+  <script src="/static/verify.js" type="module"></script>
+</body>
+</html>

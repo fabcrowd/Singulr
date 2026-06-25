@@ -1,0 +1,14 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: singulr
+      POSTGRES_PASSWORD: singulr
+      POSTGRES_DB: singulr
+    ports:
+      - "5432:5432"
+    volumes:
+      - singulr_pg:/var/lib/postgresql/data
+
+volumes:
+  singulr_pg:

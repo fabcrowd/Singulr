@@ -1,0 +1,1 @@
+"""Singulr verification platform."""

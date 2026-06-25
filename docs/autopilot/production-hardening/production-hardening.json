@@ -1,0 +1,90 @@
+{
+  "$schema": "https://raw.githubusercontent.com/Gens-ai/autopilot/main/tasks.schema.json",
+  "name": "production-hardening",
+  "description": "CI, container image, and verify-page smoke tests for Singulr",
+  "goals": [
+    "Automated verification on every push",
+    "Repeatable production container",
+    "Regression tests for the public verify page"
+  ],
+  "nonGoals": [
+    "reCAPTCHA or IPQualityScore",
+    "Admin dashboard",
+    "Live Telegram E2E automation"
+  ],
+  "_tdd": true,
+  "requirements": [
+    {
+      "id": "1",
+      "category": "infrastructure",
+      "priority": "high",
+      "description": "Add GitHub Actions workflow that runs pytest, ruff, and hardhat compile on push and pull_request",
+      "acceptance": [
+        ".github/workflows/ci.yml exists",
+        "Workflow uses Python 3.11+ and Node 20",
+        "Workflow runs .venv pytest -q, ruff check singulr tests orchestrator, and npm run compile",
+        "Workflow passes on current main branch code"
+      ],
+      "tdd": {
+        "test": {
+          "description": "Add tests/test_ci_workflow.py that asserts ci.yml exists and references pytest and ruff",
+          "passes": false
+        },
+        "implement": {
+          "description": "Create .github/workflows/ci.yml with cache for pip and npm",
+          "passes": false
+        },
+        "refactor": { "passes": false }
+      },
+      "passes": false
+    },
+    {
+      "id": "2",
+      "category": "infrastructure",
+      "priority": "high",
+      "description": "Add production Dockerfile and document docker run in README",
+      "dependsOn": ["1"],
+      "acceptance": [
+        "Dockerfile builds uvicorn app on port 8000",
+        "README has a Docker section with build and run commands",
+        "Image does not bake in .env secrets"
+      ],
+      "tdd": {
+        "test": {
+          "description": "Add tests/test_dockerfile.py checking Dockerfile exists and uses multi-stage or slim python base",
+          "passes": false
+        },
+        "implement": {
+          "description": "Create Dockerfile and optional docker-compose.prod.yml service profile",
+          "passes": false
+        },
+        "refactor": { "passes": false }
+      },
+      "passes": false
+    },
+    {
+      "id": "3",
+      "category": "functional",
+      "priority": "medium",
+      "description": "Add API smoke tests for /verify HTML and static assets",
+      "dependsOn": ["1"],
+      "acceptance": [
+        "tests/test_verify_page.py exists",
+        "GET /verify returns 200 and references verify.js",
+        "GET /static/verify.css returns 200"
+      ],
+      "tdd": {
+        "test": {
+          "description": "Write failing tests/test_verify_page.py using FastAPI TestClient",
+          "passes": false
+        },
+        "implement": {
+          "description": "Fix any static routing gaps so tests pass without changing verification logic",
+          "passes": false
+        },
+        "refactor": { "passes": false }
+      },
+      "passes": false
+    }
+  ]
+}

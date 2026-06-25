@@ -1,0 +1,1 @@
+"""Singulr service modules."""

@@ -1,0 +1,57 @@
+{
+  "max_parallel": 16,
+  "default_parallel": 4,
+  "lanes": {
+    "test-harness": {
+      "description": "Pytest fixtures and test files — no production logic conflicts",
+      "path_claims": ["tests/", "scripts/verify.ps1", "scripts/verify.sh"],
+      "max_agents": 4,
+      "phases": ["test-harness"]
+    },
+    "gate": {
+      "description": "Verification gate: matching, tokens, API, telegram actions",
+      "path_claims": [
+        "singulr/services/matching.py",
+        "singulr/services/tokens.py",
+        "singulr/api/verify.py",
+        "singulr/services/telegram_actions.py"
+      ],
+      "max_agents": 2,
+      "phases": ["gate"]
+    },
+    "watcher": {
+      "description": "Stylometry and in-channel watcher",
+      "path_claims": [
+        "singulr/services/stylometry.py",
+        "singulr/services/watcher.py",
+        "singulr/bot/handlers.py"
+      ],
+      "max_agents": 2,
+      "phases": ["watcher"]
+    },
+    "chain": {
+      "description": "Solidity and blockchain client",
+      "path_claims": [
+        "contracts/",
+        "singulr/services/blockchain.py",
+        "scripts/smoke-chain.js",
+        "hardhat.config.js"
+      ],
+      "max_agents": 2,
+      "phases": ["chain"]
+    },
+    "frontend": {
+      "description": "Verification webpage",
+      "path_claims": ["static/"],
+      "max_agents": 2,
+      "phases": ["frontend"]
+    },
+    "docs": {
+      "description": "Checklists and docs only",
+      "path_claims": ["tasks/", "README.md"],
+      "max_agents": 2,
+      "phases": ["docs", "hardening"]
+    }
+  },
+  "file_conflict_rules": "Two in_progress tasks may run in parallel only if their lanes differ and neither depends on the other."
+}
