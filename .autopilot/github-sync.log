@@ -75,3 +75,24 @@
 2026-06-25T20:06:14.2592352-04:00 [master ebe399b] chore: sync local work 2026-06-25 20:06
 2026-06-25T20:06:14.2727327-04:00  1 file changed, 3 insertions(+)
 2026-06-25T20:06:14.2737357-04:00 PUSH: origin master
+2026-06-25T21:06:14.5105678-04:00 WARN: unstaged secret file(s): .env.example
+2026-06-25T21:06:14.7870649-04:00 [master 6c22f86] chore: sync local work 2026-06-25 21:06
+2026-06-25T21:06:14.7880686-04:00  42 files changed, 1349 insertions(+), 68 deletions(-)
+2026-06-25T21:06:14.7890721-04:00  create mode 100644 data/social_blocklist.example.json
+2026-06-25T21:06:14.7905746-04:00  create mode 100644 docs/autopilot/deep-harden/HARDEN_REPORT.md
+2026-06-25T21:06:14.7915752-04:00  create mode 100644 docs/autopilot/deep-harden/audit.md
+2026-06-25T21:06:14.7920792-04:00  create mode 100644 docs/autopilot/deep-harden/deep-harden-notes.md
+2026-06-25T21:06:14.7930850-04:00  create mode 100644 docs/autopilot/deep-harden/deep-harden.json
+2026-06-25T21:06:14.7940916-04:00  create mode 100644 docs/autopilot/overnight-continue/SHIP_REPORT.md
+2026-06-25T21:06:14.7956060-04:00  create mode 100644 docs/autopilot/overnight-continue/overnight-continue-notes.md
+2026-06-25T21:06:14.7966093-04:00  create mode 100644 docs/autopilot/overnight-continue/overnight-continue.json
+2026-06-25T21:06:14.7976129-04:00  create mode 100644 docs/autopilot/social-profiling/social-profiling-notes.md
+2026-06-25T21:06:14.7981169-04:00  create mode 100644 docs/autopilot/social-profiling/social-profiling.json
+2026-06-25T21:06:14.7991208-04:00  create mode 100644 singulr/services/social_blocklist.py
+2026-06-25T21:06:14.8006229-04:00  create mode 100644 singulr/services/social_external.py
+2026-06-25T21:06:14.8016308-04:00  create mode 100644 tests/fixtures/social_blocklist.json
+2026-06-25T21:06:14.8026311-04:00  create mode 100644 tests/test_hardening.py
+2026-06-25T21:06:14.8035706-04:00  create mode 100644 tests/test_social_blocklist.py
+2026-06-25T21:06:14.8045761-04:00  create mode 100644 tests/test_social_docs.py
+2026-06-25T21:06:14.8050847-04:00  create mode 100644 tests/test_social_external.py
+2026-06-25T21:06:14.8060998-04:00 PUSH: origin master
