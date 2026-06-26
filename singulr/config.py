@@ -47,6 +47,8 @@ class Settings(BaseSettings):
     default_social_profiling_enabled: bool = True
     default_social_api_fail_mode: str = "fail_open"
     default_social_pending_score_threshold: int = 40
+    default_automation_flag_mode: str = "flag"
+    default_ai_pending_score_threshold: int = 50
     social_blocklist_path: str = ""
     social_api_url: str = ""
     social_api_key: str = ""

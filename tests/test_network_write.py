@@ -28,6 +28,8 @@ def _write_policy(**overrides: object) -> EffectivePolicy:
         "social_pending_score_threshold": 40,
         "social_external_api_enabled": False,
         "admin_ops_chat_id": None,
+        "automation_flag_mode": "flag",
+        "ai_pending_score_threshold": 50,
     }
     base.update(overrides)
     return EffectivePolicy(**base)  # type: ignore[arg-type]

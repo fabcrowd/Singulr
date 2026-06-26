@@ -248,3 +248,15 @@
 2026-06-26T10:09:10.2689666-04:00 To https://github.com/fabcrowd/Singulr.git
 2026-06-26T10:09:10.2705495-04:00    6f4e041..077f91d  HEAD -> main
 2026-06-26T10:09:10.2775712-04:00 OK: synced 1 path(s) to origin/master,main
+2026-06-26T10:39:10.6663199-04:00 WARN: unstaged secret file(s): .env.example
+2026-06-26T10:39:10.8229159-04:00 [master 15d2b8a] chore: sync local work 2026-06-26 10:39
+2026-06-26T10:39:10.8237932-04:00  9 files changed, 145 insertions(+), 9 deletions(-)
+2026-06-26T10:39:10.8247983-04:00  create mode 100644 singulr/services/client_ip.py
+2026-06-26T10:39:10.8258228-04:00  create mode 100644 tests/test_client_ip.py
+2026-06-26T10:39:10.8268262-04:00 PUSH: origin HEAD -> master (local branch: master)
+2026-06-26T10:39:12.0705030-04:00 To https://github.com/fabcrowd/Singulr.git
+2026-06-26T10:39:12.0715065-04:00    077f91d..15d2b8a  HEAD -> master
+2026-06-26T10:39:12.0775647-04:00 PUSH: origin HEAD -> main (local branch: master)
+2026-06-26T10:39:13.2673126-04:00 To https://github.com/fabcrowd/Singulr.git
+2026-06-26T10:39:13.2683129-04:00    077f91d..15d2b8a  HEAD -> main
+2026-06-26T10:39:13.2753552-04:00 OK: synced 9 path(s) to origin/master,main

@@ -28,6 +28,8 @@ class EffectivePolicy:
     social_pending_score_threshold: int
     social_external_api_enabled: bool
     admin_ops_chat_id: int | None
+    automation_flag_mode: str
+    ai_pending_score_threshold: int
 
 
 DEFAULT_NETWORK_AUTO_REJECT = ["scam_fraud", "raid_coordination"]
@@ -57,6 +59,8 @@ async def get_effective_channel_policy(
             social_pending_score_threshold=settings.default_social_pending_score_threshold,
             social_external_api_enabled=False,
             admin_ops_chat_id=settings.log_channel_id or None,
+            automation_flag_mode=settings.default_automation_flag_mode,
+            ai_pending_score_threshold=settings.default_ai_pending_score_threshold,
         )
 
     return EffectivePolicy(
@@ -93,6 +97,16 @@ async def get_effective_channel_policy(
         ),
         social_external_api_enabled=bool(row.social_external_api_enabled),
         admin_ops_chat_id=row.admin_ops_chat_id,
+        automation_flag_mode=(
+            row.automation_flag_mode
+            if row.automation_flag_mode is not None
+            else settings.default_automation_flag_mode
+        ),
+        ai_pending_score_threshold=(
+            row.ai_pending_score_threshold
+            if row.ai_pending_score_threshold is not None
+            else settings.default_ai_pending_score_threshold
+        ),
     )
 
 

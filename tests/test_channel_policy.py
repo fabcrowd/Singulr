@@ -23,6 +23,8 @@ async def test_missing_row_uses_balanced_config_defaults(db_session: AsyncSessio
     assert policy.instant_ban_categories == ["impersonation", "bot_abuse"]
     assert policy.social_profiling_enabled is True
     assert policy.social_api_fail_mode == "fail_open"
+    assert policy.automation_flag_mode == "flag"
+    assert policy.ai_pending_score_threshold == 50
     assert policy.admin_ops_chat_id is None
 
 
@@ -51,6 +53,26 @@ async def test_persisted_row_overrides_config_defaults(db_session: AsyncSession)
     assert policy.admin_ops_chat_id == -1001234567890
 
 
+@pytest.mark.asyncio
+async def test_persisted_automation_fields_override_defaults(db_session: AsyncSession) -> None:
+    """Stored automation policy fields override global defaults."""
+    channel_id = 99003
+    db_session.add(
+        ChannelSecuritySettings(
+            channel_id=channel_id,
+            security_preset="strict",
+            automation_flag_mode="pending",
+            ai_pending_score_threshold=35,
+        )
+    )
+    await db_session.commit()
+
+    policy = await get_effective_channel_policy(db_session, channel_id=channel_id)
+
+    assert policy.automation_flag_mode == "pending"
+    assert policy.ai_pending_score_threshold == 35
+
+
 def test_effective_policy_field_types() -> None:
     """EffectivePolicy exposes typed threshold and mode fields for matching."""
     policy = EffectivePolicy(
@@ -67,9 +89,13 @@ def test_effective_policy_field_types() -> None:
         social_pending_score_threshold=40,
         social_external_api_enabled=False,
         admin_ops_chat_id=None,
+        automation_flag_mode="flag",
+        ai_pending_score_threshold=50,
     )
 
     assert isinstance(policy.ban_evasion_auto_deny_threshold, float)
     assert isinstance(policy.local_similarity_flag_threshold, float)
     assert isinstance(policy.network_registry_mode, str)
     assert isinstance(policy.security_preset, str)
+    assert isinstance(policy.automation_flag_mode, str)
+    assert isinstance(policy.ai_pending_score_threshold, int)

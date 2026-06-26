@@ -78,7 +78,7 @@
         "tests/test_channel_policy.py covers defaults",
         "verify.ps1 green"
       ],
-      "passes": false
+      "passes": true
     },
     {
       "id": "6",

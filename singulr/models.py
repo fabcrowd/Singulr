@@ -157,3 +157,5 @@ class ChannelSecuritySettings(Base):
         DateTime(timezone=True), nullable=True
     )
     wizard_version: Mapped[int] = mapped_column(Integer, default=1)
+    automation_flag_mode: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    ai_pending_score_threshold: Mapped[int | None] = mapped_column(Integer, nullable=True)

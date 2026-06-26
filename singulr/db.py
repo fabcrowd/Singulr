@@ -51,6 +51,8 @@ async def _apply_schema_patches(conn) -> None:
             "ALTER TABLE channel_security_settings ADD COLUMN IF NOT EXISTS social_pending_score_threshold INTEGER",
             "ALTER TABLE channel_security_settings ADD COLUMN IF NOT EXISTS social_external_api_enabled BOOLEAN DEFAULT FALSE",
             "ALTER TABLE channel_security_settings ADD COLUMN IF NOT EXISTS wizard_version INTEGER DEFAULT 1",
+            "ALTER TABLE channel_security_settings ADD COLUMN IF NOT EXISTS automation_flag_mode VARCHAR(16)",
+            "ALTER TABLE channel_security_settings ADD COLUMN IF NOT EXISTS ai_pending_score_threshold INTEGER",
             "ALTER TABLE tokens ADD COLUMN IF NOT EXISTS join_username VARCHAR(64)",
             "ALTER TABLE tokens ADD COLUMN IF NOT EXISTS join_display_name VARCHAR(256)",
             "ALTER TABLE tokens ADD COLUMN IF NOT EXISTS join_language_code VARCHAR(16)",
@@ -119,6 +121,16 @@ async def _apply_schema_patches(conn) -> None:
     if settings_cols and "wizard_version" not in settings_cols:
         await conn.execute(
             text("ALTER TABLE channel_security_settings ADD COLUMN wizard_version INTEGER DEFAULT 1")
+        )
+    if settings_cols and "automation_flag_mode" not in settings_cols:
+        await conn.execute(
+            text("ALTER TABLE channel_security_settings ADD COLUMN automation_flag_mode VARCHAR(16)")
+        )
+    if settings_cols and "ai_pending_score_threshold" not in settings_cols:
+        await conn.execute(
+            text(
+                "ALTER TABLE channel_security_settings ADD COLUMN ai_pending_score_threshold INTEGER"
+            )
         )
 
     token_cols = await _sqlite_columns("tokens")

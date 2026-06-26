@@ -98,6 +98,8 @@ async def _resolve_effective_policy(
         social_pending_score_threshold=settings.default_social_pending_score_threshold,
         social_external_api_enabled=False,
         admin_ops_chat_id=settings.log_channel_id or None,
+        automation_flag_mode=settings.default_automation_flag_mode,
+        ai_pending_score_threshold=settings.default_ai_pending_score_threshold,
     )
 
 
