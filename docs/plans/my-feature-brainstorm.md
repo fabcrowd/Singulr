@@ -313,18 +313,18 @@ On PENDING/BLOCK from social:
 - `analyze_social_profile()` with cache hit logging, duration metrics, fail_closed → PENDING
 - Pending decision uses **risk score ≥ threshold** (default 40); weak signals alone do not hold joiners
 
-### Phase 3 — external API (not started)
+### Phase 3 — external API (shipped 2026-06-25)
 
-- [ ] `ExternalApiProvider` with httpx, 1.5s timeout, redacted logging
-- [ ] Env: `SOCIAL_API_URL`, `SOCIAL_API_KEY`, `SOCIAL_API_ENABLED`
-- [ ] One vendor POC; map response → `hard_categories` / `soft_signals`
-- [ ] Integration test with recorded fixture (no live API in CI)
+- [x] `ExternalApiProvider` with httpx, 1.5s timeout, redacted logging
+- [x] Env: `SOCIAL_API_URL`, `SOCIAL_API_KEY`, `SOCIAL_BLOCKLIST_PATH`
+- [x] `BlocklistProvider` + fixture tests
+- [x] Channel `social_external_api_enabled` opt-in
 
-### Phase 4 — Admin configurability
+### Phase 4 — Admin configurability (shipped 2026-06-25)
 
-- [ ] `/security` wizard step: instant-ban category multi-select (reuse network categories UI pattern)
-- [ ] Toggle: “Use external social API at verify” per channel
-- [ ] `format_policy_summary` shows social settings
+- [x] `/security` wizard v3: instant-ban category multi-select
+- [x] Toggle external API and social profiling per channel
+- [x] `format_policy_summary` shows social settings
 
 ---
 

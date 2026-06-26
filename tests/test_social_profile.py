@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from pathlib import Path
+
 import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -39,6 +41,7 @@ def _policy(**overrides: object) -> EffectivePolicy:
         "social_profiling_enabled": True,
         "social_api_fail_mode": "fail_open",
         "social_pending_score_threshold": 40,
+        "social_external_api_enabled": False,
         "admin_ops_chat_id": None,
     }
     base.update(overrides)
@@ -253,6 +256,38 @@ async def test_fail_closed_forces_pending_on_provider_error(db_session: AsyncSes
         )
     assert result.decision == Decision.PENDING
     assert "social_provider_error" in result.risk_factors
+
+
+@pytest.mark.asyncio
+async def test_matching_blocks_blocklist_hard_category(
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Blocklist hard category in instant_ban list blocks at verify submit."""
+    fixture = Path(__file__).resolve().parent / "fixtures" / "social_blocklist.json"
+    monkeypatch.setenv("SOCIAL_BLOCKLIST_PATH", str(fixture))
+    from singulr.config import get_settings
+
+    get_settings.cache_clear()
+
+    token = await create_token(db_session, telegram_user_id=990002, channel_id=42)
+    row = await db_session.scalar(
+        select(VerificationToken).where(VerificationToken.token == token)
+    )
+    assert row is not None
+
+    result = await check_known_bad(
+        db_session,
+        _chain_mock(),
+        telegram_user_id=990002,
+        fingerprint_hash="0x" + "88" * 32,
+        ip_hash=None,
+        channel_id=42,
+        policy=_policy(),
+        token_row=row,
+    )
+    assert result.decision == Decision.BLOCK
+    assert any("social_hard" in factor for factor in result.risk_factors)
 
 
 @pytest.mark.asyncio

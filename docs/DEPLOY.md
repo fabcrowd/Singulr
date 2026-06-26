@@ -36,14 +36,20 @@ Production deployment for the FastAPI + Telegram bot stack using Docker Compose.
 15. Set `CHANNEL_ID` to the numeric channel id and `PUBLIC_BASE_URL` to the HTTPS URL users open for `/verify?token=...`.
 16. Send `/start` in a private chat with the bot to confirm polling; join the channel with a test account to exercise verification.
 
+## Social profiling (optional)
+
+17. Copy `data/social_blocklist.example.json` to a persistent path on the host; set `SOCIAL_BLOCKLIST_PATH` in `.env` (mounted into the app container if using Compose).
+18. Optionally set `SOCIAL_API_URL` and `SOCIAL_API_KEY` for an external scoring HTTP API. Channels must opt in via the bot **`/security`** wizard (v3) — toggle **External API** on question 7.
+19. Channel admins run `/security` in a private chat to set instant-ban categories (question 6) and social profiling toggles. Wizard version 3 persists `instant_ban_categories`, `social_profiling_enabled`, and `social_external_api_enabled`.
+
 ## Operations
 
-17. Tail logs: `docker compose logs -f app` — with `LOG_JSON=true`, lines are JSON access events from `singulr.access`.
-18. Rate limits: verify endpoints allow `VERIFY_RATE_LIMIT_PER_MINUTE` requests per client IP per minute; excess returns HTTP 429.
-19. Database backups: snapshot the `singulr_pg` Docker volume or use `pg_dump` against the `db` service.
-20. Upgrades: pull latest code, rebuild (`docker compose ... build`), and `up -d` with the same compose files.
+20. Tail logs: `docker compose logs -f app` — with `LOG_JSON=true`, lines are JSON access events from `singulr.access`.
+21. Rate limits: verify endpoints allow `VERIFY_RATE_LIMIT_PER_MINUTE` requests per client IP per minute; excess returns HTTP 429.
+22. Database backups: snapshot the `singulr_pg` Docker volume or use `pg_dump` against the `db` service.
+23. Upgrades: pull latest code, rebuild (`docker compose ... build`), and `up -d` with the same compose files.
 
 ## Rollback
 
-21. Stop the stack: `docker compose -f docker-compose.yml -f docker-compose.prod.yml down`
-22. Restore the previous image tag or git revision, restore DB backup if schema changed, then repeat steps 7–10 before re-enabling Telegram traffic.
+24. Stop the stack: `docker compose -f docker-compose.yml -f docker-compose.prod.yml down`
+25. Restore the previous image tag or git revision, restore DB backup if schema changed, then repeat steps 7–10 before re-enabling Telegram traffic.

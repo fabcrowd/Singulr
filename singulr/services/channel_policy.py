@@ -26,6 +26,7 @@ class EffectivePolicy:
     social_profiling_enabled: bool
     social_api_fail_mode: str
     social_pending_score_threshold: int
+    social_external_api_enabled: bool
     admin_ops_chat_id: int | None
 
 
@@ -54,6 +55,7 @@ async def get_effective_channel_policy(
             social_profiling_enabled=settings.default_social_profiling_enabled,
             social_api_fail_mode=settings.default_social_api_fail_mode,
             social_pending_score_threshold=settings.default_social_pending_score_threshold,
+            social_external_api_enabled=False,
             admin_ops_chat_id=settings.log_channel_id or None,
         )
 
@@ -89,6 +91,7 @@ async def get_effective_channel_policy(
             if row.social_pending_score_threshold is not None
             else settings.default_social_pending_score_threshold
         ),
+        social_external_api_enabled=bool(row.social_external_api_enabled),
         admin_ops_chat_id=row.admin_ops_chat_id,
     )
 
@@ -138,6 +141,9 @@ async def upsert_channel_security_settings(
     admin_ops_chat_id: int | None,
     network_registry_mode: str | None = None,
     network_auto_reject_categories: list[str] | None = None,
+    instant_ban_categories: list[str] | None = None,
+    social_profiling_enabled: bool | None = None,
+    social_external_api_enabled: bool | None = None,
 ) -> ChannelSecuritySettings:
     """Create or update channel policy from wizard answers."""
     resolved = resolve_wizard_thresholds(preset, evasion_mode)
@@ -157,15 +163,23 @@ async def upsert_channel_security_settings(
         row.network_auto_reject_categories = list(DEFAULT_NETWORK_AUTO_REJECT)
     if row.instant_ban_categories is None:
         row.instant_ban_categories = list(DEFAULT_INSTANT_BAN_CATEGORIES)
+    if instant_ban_categories is not None:
+        row.instant_ban_categories = list(instant_ban_categories)
+    if social_profiling_enabled is not None:
+        row.social_profiling_enabled = social_profiling_enabled
+    if social_external_api_enabled is not None:
+        row.social_external_api_enabled = social_external_api_enabled
     if row.social_profiling_enabled is None:
         row.social_profiling_enabled = True
     if row.social_api_fail_mode is None:
         row.social_api_fail_mode = "fail_open"
     if row.social_pending_score_threshold is None:
         row.social_pending_score_threshold = get_settings().default_social_pending_score_threshold
+    if row.social_external_api_enabled is None:
+        row.social_external_api_enabled = False
     row.admin_ops_chat_id = admin_ops_chat_id
     row.wizard_completed_at = datetime.now(UTC)
-    row.wizard_version = 2
+    row.wizard_version = 3
     await session.commit()
     await session.refresh(row)
     return row
@@ -178,6 +192,7 @@ def format_policy_summary(row: ChannelSecuritySettings) -> str:
     instant = ", ".join(row.instant_ban_categories or DEFAULT_INSTANT_BAN_CATEGORIES)
     share = "yes" if row.share_bans_to_network else "no"
     social = "on" if row.social_profiling_enabled else "off"
+    external = "on" if row.social_external_api_enabled else "off"
     return (
         f"Preset: {row.security_preset}\n"
         f"Auto-deny threshold: {row.ban_evasion_auto_deny_threshold:.2f}\n"
@@ -186,6 +201,6 @@ def format_policy_summary(row: ChannelSecuritySettings) -> str:
         f"Share bans to network: {share}\n"
         f"Network auto-reject: {categories}\n"
         f"Instant-ban categories: {instant}\n"
-        f"Social profiling: {social} (fail mode: {row.social_api_fail_mode})\n"
+        f"Social profiling: {social} (external API: {external}, fail mode: {row.social_api_fail_mode})\n"
         f"Ops chat: {ops}"
     )

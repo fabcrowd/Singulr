@@ -19,6 +19,7 @@ from singulr.db import SessionLocal
 from singulr.domain.ban_taxonomy import BanCategory
 from singulr.models import ChannelSecuritySettings
 from singulr.services.channel_policy import (
+    DEFAULT_INSTANT_BAN_CATEGORIES,
     DEFAULT_NETWORK_AUTO_REJECT,
     format_policy_summary,
     resolve_wizard_thresholds,
@@ -33,9 +34,13 @@ WIZARD_EVASION_KEY = "security_wizard_evasion"
 WIZARD_OPS_KEY = "security_wizard_ops_chat_id"
 WIZARD_NETWORK_MODE_KEY = "security_wizard_network_mode"
 WIZARD_NET_CATEGORIES_KEY = "security_wizard_net_categories"
+WIZARD_INSTANT_BAN_KEY = "security_wizard_instant_ban"
+WIZARD_SOCIAL_PROFILING_KEY = "security_wizard_social_profiling"
+WIZARD_SOCIAL_EXTERNAL_KEY = "security_wizard_social_external"
 WIZARD_DELTA_ONLY_KEY = "security_wizard_delta_only"
 
-CURRENT_WIZARD_VERSION = 2
+CURRENT_WIZARD_VERSION = 3
+WIZARD_TOTAL_QUESTIONS = 7
 
 
 class WizardState(IntEnum):
@@ -47,7 +52,9 @@ class WizardState(IntEnum):
     OPS_CHAT = 3
     NETWORK_MODE = 4
     NETWORK_CATEGORIES = 5
-    CONFIRM = 6
+    INSTANT_BAN = 6
+    SOCIAL = 7
+    CONFIRM = 8
 
 
 async def is_channel_admin(update: Update, channel_id: int) -> bool:
@@ -115,6 +122,48 @@ def _network_mode_keyboard() -> InlineKeyboardMarkup:
     )
 
 
+def _instant_ban_keyboard(selected: set[str]) -> InlineKeyboardMarkup:
+    """Multi-select categories for instant channel ban on verify."""
+    instant_choices = (
+        BanCategory.IMPERSONATION,
+        BanCategory.BOT_ABUSE,
+        BanCategory.SCAM_FRAUD,
+        BanCategory.SPAM,
+        BanCategory.RAID_COORDINATION,
+    )
+    rows: list[list[InlineKeyboardButton]] = []
+    for category in instant_choices:
+        mark = "✓ " if category.value in selected else ""
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    f"{mark}{category.value}",
+                    callback_data=f"sec_ib_{category.value}",
+                )
+            ]
+        )
+    rows.append(
+        [
+            InlineKeyboardButton("Use defaults", callback_data="sec_ib_defaults"),
+            InlineKeyboardButton("Done", callback_data="sec_ib_done"),
+        ]
+    )
+    return InlineKeyboardMarkup(rows)
+
+
+def _social_keyboard(*, profiling: bool, external: bool) -> InlineKeyboardMarkup:
+    """Toggle social profiling and external API."""
+    prof_label = "Profiling: ON" if profiling else "Profiling: OFF"
+    ext_label = "External API: ON" if external else "External API: OFF"
+    return InlineKeyboardMarkup(
+        [
+            [InlineKeyboardButton(prof_label, callback_data="sec_soc_toggle_prof")],
+            [InlineKeyboardButton(ext_label, callback_data="sec_soc_toggle_ext")],
+            [InlineKeyboardButton("Continue", callback_data="sec_soc_done")],
+        ]
+    )
+
+
 def _categories_keyboard(selected: set[str]) -> InlineKeyboardMarkup:
     """Multi-select ban categories for network auto-reject."""
     rows: list[list[InlineKeyboardButton]] = []
@@ -160,6 +209,9 @@ def _wizard_user_data_keys() -> tuple[str, ...]:
         WIZARD_OPS_KEY,
         WIZARD_NETWORK_MODE_KEY,
         WIZARD_NET_CATEGORIES_KEY,
+        WIZARD_INSTANT_BAN_KEY,
+        WIZARD_SOCIAL_PROFILING_KEY,
+        WIZARD_SOCIAL_EXTERNAL_KEY,
         WIZARD_DELTA_ONLY_KEY,
     )
 
@@ -179,6 +231,11 @@ def _preview_settings(context: ContextTypes.DEFAULT_TYPE) -> ChannelSecuritySett
         context.user_data.get(WIZARD_NETWORK_MODE_KEY, resolve_wizard_thresholds(preset, evasion).network_registry_mode)
     )
     categories = sorted(context.user_data.get(WIZARD_NET_CATEGORIES_KEY, set(DEFAULT_NETWORK_AUTO_REJECT)))
+    instant = sorted(
+        context.user_data.get(WIZARD_INSTANT_BAN_KEY, set(DEFAULT_INSTANT_BAN_CATEGORIES))
+    )
+    social_profiling = bool(context.user_data.get(WIZARD_SOCIAL_PROFILING_KEY, True))
+    social_external = bool(context.user_data.get(WIZARD_SOCIAL_EXTERNAL_KEY, False))
     resolved = resolve_wizard_thresholds(preset, evasion)
     return ChannelSecuritySettings(
         channel_id=channel_id,
@@ -188,6 +245,9 @@ def _preview_settings(context: ContextTypes.DEFAULT_TYPE) -> ChannelSecuritySett
         network_registry_mode=network_mode,
         share_bans_to_network=network_mode == "read_write",
         network_auto_reject_categories=categories,
+        instant_ban_categories=instant,
+        social_profiling_enabled=social_profiling,
+        social_external_api_enabled=social_external,
         admin_ops_chat_id=ops_chat_id,
     )
 
@@ -233,7 +293,7 @@ async def security_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         and existing.wizard_version < CURRENT_WIZARD_VERSION
     ):
         await update.message.reply_text(
-            "New network registry settings are available.\n"
+            "New social profiling settings are available.\n"
             "Answer only the new questions, or review everything from scratch:",
             reply_markup=_delta_keyboard(),
         )
@@ -274,11 +334,23 @@ async def delta_selected(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     context.user_data[WIZARD_PRESET_KEY] = existing.security_preset
     context.user_data[WIZARD_EVASION_KEY] = _evasion_mode_from_row(existing)
     context.user_data[WIZARD_OPS_KEY] = existing.admin_ops_chat_id
-    await query.edit_message_text(
-        "Security setup (question 4 of 5)\nNetwork registry participation:",
-        reply_markup=_network_mode_keyboard(),
+    context.user_data[WIZARD_NETWORK_MODE_KEY] = existing.network_registry_mode
+    context.user_data[WIZARD_NET_CATEGORIES_KEY] = set(
+        existing.network_auto_reject_categories or DEFAULT_NETWORK_AUTO_REJECT
     )
-    return WizardState.NETWORK_MODE
+    context.user_data[WIZARD_INSTANT_BAN_KEY] = set(
+        existing.instant_ban_categories or DEFAULT_INSTANT_BAN_CATEGORIES
+    )
+    context.user_data[WIZARD_SOCIAL_PROFILING_KEY] = bool(existing.social_profiling_enabled)
+    context.user_data[WIZARD_SOCIAL_EXTERNAL_KEY] = bool(existing.social_external_api_enabled)
+    await query.edit_message_text(
+        f"Security setup (question 6 of {WIZARD_TOTAL_QUESTIONS})\n"
+        "Tap categories for instant ban on verify (toggle on/off), then Done:",
+        reply_markup=_instant_ban_keyboard(
+            set(existing.instant_ban_categories or DEFAULT_INSTANT_BAN_CATEGORIES)
+        ),
+    )
+    return WizardState.INSTANT_BAN
 
 
 def _evasion_mode_from_row(row: ChannelSecuritySettings) -> str:
@@ -386,14 +458,13 @@ async def network_categories_selected(
         if not selected:
             selected = set(DEFAULT_NETWORK_AUTO_REJECT)
             context.user_data[WIZARD_NET_CATEGORIES_KEY] = selected
-        preview = _preview_settings(context)
-        summary = format_policy_summary(preview)
-        channel_id = int(context.user_data[WIZARD_CHANNEL_KEY])
+        context.user_data[WIZARD_INSTANT_BAN_KEY] = set(DEFAULT_INSTANT_BAN_CATEGORIES)
         await query.edit_message_text(
-            f"Confirm security settings for channel {channel_id}:\n\n{summary}",
-            reply_markup=_confirm_keyboard(),
+            f"Security setup (question 6 of {WIZARD_TOTAL_QUESTIONS})\n"
+            "Tap categories for instant ban on verify (toggle on/off), then Done:",
+            reply_markup=_instant_ban_keyboard(set(DEFAULT_INSTANT_BAN_CATEGORIES)),
         )
-        return WizardState.CONFIRM
+        return WizardState.INSTANT_BAN
 
     category = query.data.removeprefix("sec_cat_")
     if category in selected:
@@ -407,6 +478,94 @@ async def network_categories_selected(
         reply_markup=_categories_keyboard(selected),
     )
     return WizardState.NETWORK_CATEGORIES
+
+
+async def instant_ban_selected(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Toggle instant-ban categories or advance to social settings."""
+    query = update.callback_query
+    if not query or not query.data:
+        return ConversationHandler.END
+    await query.answer()
+
+    selected: set[str] = set(context.user_data.get(WIZARD_INSTANT_BAN_KEY, set()))
+
+    if query.data == "sec_ib_defaults":
+        selected = set(DEFAULT_INSTANT_BAN_CATEGORIES)
+        context.user_data[WIZARD_INSTANT_BAN_KEY] = selected
+        await query.edit_message_text(
+            f"Security setup (question 6 of {WIZARD_TOTAL_QUESTIONS})\n"
+            "Tap categories for instant ban on verify (toggle on/off), then Done:",
+            reply_markup=_instant_ban_keyboard(selected),
+        )
+        return WizardState.INSTANT_BAN
+
+    if query.data == "sec_ib_done":
+        if not selected:
+            selected = set(DEFAULT_INSTANT_BAN_CATEGORIES)
+            context.user_data[WIZARD_INSTANT_BAN_KEY] = selected
+        context.user_data.setdefault(WIZARD_SOCIAL_PROFILING_KEY, True)
+        context.user_data.setdefault(WIZARD_SOCIAL_EXTERNAL_KEY, False)
+        profiling = bool(context.user_data[WIZARD_SOCIAL_PROFILING_KEY])
+        external = bool(context.user_data[WIZARD_SOCIAL_EXTERNAL_KEY])
+        await query.edit_message_text(
+            f"Security setup (question 7 of {WIZARD_TOTAL_QUESTIONS})\n"
+            "Social profiling toggles:",
+            reply_markup=_social_keyboard(profiling=profiling, external=external),
+        )
+        return WizardState.SOCIAL
+
+    category = query.data.removeprefix("sec_ib_")
+    if category in selected:
+        selected.remove(category)
+    else:
+        selected.add(category)
+    context.user_data[WIZARD_INSTANT_BAN_KEY] = selected
+    await query.edit_message_text(
+        f"Security setup (question 6 of {WIZARD_TOTAL_QUESTIONS})\n"
+        "Tap categories for instant ban on verify (toggle on/off), then Done:",
+        reply_markup=_instant_ban_keyboard(selected),
+    )
+    return WizardState.INSTANT_BAN
+
+
+async def social_selected(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Toggle social settings or show confirmation."""
+    query = update.callback_query
+    if not query or not query.data:
+        return ConversationHandler.END
+    await query.answer()
+
+    profiling = bool(context.user_data.get(WIZARD_SOCIAL_PROFILING_KEY, True))
+    external = bool(context.user_data.get(WIZARD_SOCIAL_EXTERNAL_KEY, False))
+
+    if query.data == "sec_soc_toggle_prof":
+        context.user_data[WIZARD_SOCIAL_PROFILING_KEY] = not profiling
+        profiling = not profiling
+        await query.edit_message_text(
+            f"Security setup (question 7 of {WIZARD_TOTAL_QUESTIONS})\n"
+            "Social profiling toggles:",
+            reply_markup=_social_keyboard(profiling=profiling, external=external),
+        )
+        return WizardState.SOCIAL
+
+    if query.data == "sec_soc_toggle_ext":
+        context.user_data[WIZARD_SOCIAL_EXTERNAL_KEY] = not external
+        external = not external
+        await query.edit_message_text(
+            f"Security setup (question 7 of {WIZARD_TOTAL_QUESTIONS})\n"
+            "Social profiling toggles:",
+            reply_markup=_social_keyboard(profiling=profiling, external=external),
+        )
+        return WizardState.SOCIAL
+
+    preview = _preview_settings(context)
+    summary = format_policy_summary(preview)
+    channel_id = int(context.user_data[WIZARD_CHANNEL_KEY])
+    await query.edit_message_text(
+        f"Confirm security settings for channel {channel_id}:\n\n{summary}",
+        reply_markup=_confirm_keyboard(),
+    )
+    return WizardState.CONFIRM
 
 
 async def confirm_selected(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -431,9 +590,12 @@ async def confirm_selected(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     ops_chat_id = context.user_data.get(WIZARD_OPS_KEY)
     network_mode = str(context.user_data[WIZARD_NETWORK_MODE_KEY])
     categories = sorted(context.user_data.get(WIZARD_NET_CATEGORIES_KEY, set()))
+    instant = sorted(context.user_data.get(WIZARD_INSTANT_BAN_KEY, set()))
+    social_profiling = bool(context.user_data.get(WIZARD_SOCIAL_PROFILING_KEY, True))
+    social_external = bool(context.user_data.get(WIZARD_SOCIAL_EXTERNAL_KEY, False))
 
     async with SessionLocal() as session:
-        await upsert_channel_security_settings(
+        row = await upsert_channel_security_settings(
             session,
             channel_id=channel_id,
             preset=preset,
@@ -441,7 +603,12 @@ async def confirm_selected(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             admin_ops_chat_id=ops_chat_id,
             network_registry_mode=network_mode,
             network_auto_reject_categories=categories,
+            instant_ban_categories=instant,
+            social_profiling_enabled=social_profiling,
+            social_external_api_enabled=social_external,
         )
+        row.wizard_version = CURRENT_WIZARD_VERSION
+        await session.commit()
 
     await query.edit_message_text("Security settings saved. New join verifications will use this policy.")
     _clear_wizard_user_data(context)
@@ -478,6 +645,12 @@ def build_security_wizard_handler() -> ConversationHandler:
             ],
             WizardState.NETWORK_CATEGORIES: [
                 CallbackQueryHandler(network_categories_selected, pattern=r"^sec_cat_"),
+            ],
+            WizardState.INSTANT_BAN: [
+                CallbackQueryHandler(instant_ban_selected, pattern=r"^sec_ib_"),
+            ],
+            WizardState.SOCIAL: [
+                CallbackQueryHandler(social_selected, pattern=r"^sec_soc_"),
             ],
             WizardState.CONFIRM: [
                 CallbackQueryHandler(confirm_selected, pattern=r"^sec_confirm_"),

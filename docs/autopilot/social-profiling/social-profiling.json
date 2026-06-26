@@ -1,0 +1,103 @@
+{
+  "$schema": "https://raw.githubusercontent.com/Gens-ai/autopilot/main/tasks.schema.json",
+  "name": "social-profiling",
+  "description": "Social profiling Phase 3-4: self-hosted blocklist, external HTTP API provider, channel opt-in, security wizard social settings",
+  "goals": [
+    "Self-hosted scam/blocklist without paid vendor",
+    "Generic external social API with timeout and redacted logging",
+    "Per-channel opt-in for external API at verify submit",
+    "Admin /security wizard controls for instant-ban categories and social toggles"
+  ],
+  "nonGoals": [
+    "Specific commercial vendor lock-in",
+    "Joiner-visible social signals",
+    "Profile photo API checks"
+  ],
+  "_tdd": true,
+  "requirements": [
+    {
+      "id": "1",
+      "category": "functional",
+      "description": "Self-hosted blocklist provider loads JSON and maps known user ids to hard categories",
+      "acceptance": [
+        "BlocklistProvider reads SOCIAL_BLOCKLIST_PATH JSON entries",
+        "Known telegram_user_id returns hard category from blocklist",
+        "pytest uses tests/fixtures/social_blocklist.json without live network"
+      ],
+      "passes": true
+    },
+    {
+      "id": "2",
+      "category": "functional",
+      "description": "ExternalApiProvider calls SOCIAL_API_URL with httpx timeout and maps JSON response",
+      "dependsOn": [
+        "1"
+      ],
+      "acceptance": [
+        "ExternalApiProvider POSTs telegram_user_id username display_name",
+        "1.5s timeout; failures raise SocialProfileProviderError",
+        "Response maps hard_categories soft_signals risk_score summary",
+        "pytest uses httpx mock fixture no live API"
+      ],
+      "passes": true
+    },
+    {
+      "id": "3",
+      "category": "functional",
+      "description": "Channel policy social_external_api_enabled gates external provider at verify",
+      "dependsOn": [
+        "2"
+      ],
+      "acceptance": [
+        "EffectivePolicy exposes social_external_api_enabled default false",
+        "get_composite_provider includes external only when policy flag and URL set",
+        "Blocklist always included when SOCIAL_BLOCKLIST_PATH configured"
+      ],
+      "passes": true
+    },
+    {
+      "id": "4",
+      "category": "ui",
+      "description": "Security wizard instant-ban category multi-select and social toggles",
+      "dependsOn": [
+        "3"
+      ],
+      "acceptance": [
+        "Wizard steps after network categories for instant-ban and social settings",
+        "Persist instant_ban_categories social_external_api_enabled social_profiling_enabled",
+        "format_policy_summary shows instant-ban and social lines",
+        "wizard_version bumped to 3"
+      ],
+      "passes": true
+    },
+    {
+      "id": "5",
+      "category": "functional",
+      "description": "Social BLOCK from external/blocklist uses structured persist_ban category",
+      "dependsOn": [
+        "3"
+      ],
+      "acceptance": [
+        "verify submit BLOCK from social_hard uses block_ban_taxonomy or social category",
+        "Admin ops card shows social source in More details"
+      ],
+      "passes": true
+    },
+    {
+      "id": "6",
+      "category": "testing",
+      "description": "Integration tests for blocklist hard ban and external API soft/hard mapping",
+      "dependsOn": [
+        "1",
+        "2",
+        "3"
+      ],
+      "acceptance": [
+        "tests/test_social_blocklist.py passes",
+        "tests/test_social_external.py passes",
+        "scripts/verify.ps1 green"
+      ],
+      "passes": true
+    }
+  ]
+}

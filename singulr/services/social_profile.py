@@ -208,17 +208,38 @@ class CompositeSocialProfileProvider:
         return merged
 
 
-def get_composite_provider() -> CompositeSocialProfileProvider:
-    """Build the active provider stack from settings."""
+def get_composite_provider(policy: EffectivePolicy | None = None) -> CompositeSocialProfileProvider:
+    """Build the active provider stack from settings and channel policy."""
+    from singulr.services.social_blocklist import BlocklistProvider
+    from singulr.services.social_external import ExternalApiProvider
+
+    settings = get_settings()
     providers: list[SocialProfileProvider] = [TelegramNativeProvider()]
-    if get_settings().social_profile_provider == "mock":
+
+    if settings.social_blocklist_path.strip():
+        providers.append(BlocklistProvider(settings.social_blocklist_path))
+
+    if (
+        policy is not None
+        and policy.social_external_api_enabled
+        and settings.social_api_url.strip()
+    ):
+        providers.append(
+            ExternalApiProvider(
+                url=settings.social_api_url.strip(),
+                api_key=settings.social_api_key,
+                timeout_seconds=settings.social_api_timeout_seconds,
+            )
+        )
+
+    if settings.social_profile_provider == "mock":
         providers.append(MockSocialProfileProvider())
     return CompositeSocialProfileProvider(providers)
 
 
-def get_social_profile_provider() -> CompositeSocialProfileProvider:
+def get_social_profile_provider(policy: EffectivePolicy | None = None) -> CompositeSocialProfileProvider:
     """Factory for backward-compatible call sites."""
-    return get_composite_provider()
+    return get_composite_provider(policy)
 
 
 async def _find_token_for_cache(
@@ -285,7 +306,7 @@ async def analyze_social_profile(
 
     started = time.perf_counter()
     try:
-        result = await get_composite_provider().analyze(ctx)
+        result = await get_composite_provider(policy).analyze(ctx)
     except SocialProfileProviderError:
         duration_ms = int((time.perf_counter() - started) * 1000)
         logger.warning(

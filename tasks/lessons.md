@@ -36,10 +36,16 @@ Failures and patterns the agent must not repeat. Updated automatically on `orche
 - **Fix:** Reactivate overturned/expired rows on re-ban; filter `status=active` in matching/watcher.
 - **Guard:** `tests/test_reinstatement.py::test_record_ban_reactivates_overturned_row`
 
-### 2026-06-25 — verifier — async tests not counted
-- **Symptom:** `autopilot verify` reported 0 test functions in files using `async def test_`.
-- **Root cause:** `TEST_FUNC_RE` only matched `def test_`.
-- **Fix:** Regex now accepts optional `async` prefix.
-- **Guard:** `orchestrator/verifier.py`
+### 2026-06-26 — deep-harden — verify double-submit race
+- **Symptom:** Concurrent verify submits could both approve the same user.
+- **Root cause:** `validate_token` + late `mark_token_used` was not atomic.
+- **Fix:** `claim_verification_token()` UPDATE … WHERE used=false at submit entry.
+- **Guard:** `tests/test_hardening.py::test_claim_token_prevents_second_submit`, `tests/test_api_verify.py::test_submit_rejects_reused_token`
+
+### 2026-06-26 — deep-harden — ops callbacks without admin check
+- **Symptom:** Any user tapping Permit/Deny inline buttons could act on pending users.
+- **Root cause:** `on_callback` did not verify channel administrator status.
+- **Fix:** `_require_ops_admin()` before permit, deny, and details handlers.
+- **Guard:** `tests/test_hardening.py::test_permit_callback_rejects_non_admin`
 
 ---

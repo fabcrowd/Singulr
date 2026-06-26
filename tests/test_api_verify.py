@@ -100,6 +100,30 @@ async def test_precheck_blocks_banned_fingerprint_new_account(
 
 
 @pytest.mark.asyncio
+@patch("singulr.api.verify._notify_bot", new_callable=AsyncMock)
+async def test_submit_rejects_reused_token(
+    _mock_notify: AsyncMock,
+    api_client: httpx.AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """Second submit with the same token returns link_expired (410)."""
+    token = await create_token(db_session, telegram_user_id=223, channel_id=42)
+
+    first = await api_client.post(
+        "/api/verify/submit",
+        json=_submit_body(token),
+    )
+    assert first.status_code == 200
+
+    second = await api_client.post(
+        "/api/verify/submit",
+        json=_submit_body(token),
+    )
+    assert second.status_code == 410
+    assert second.json()["detail"] == "link_expired"
+
+
+@pytest.mark.asyncio
 async def test_submit_rejects_wrong_sentence(
     api_client: httpx.AsyncClient,
     db_session: AsyncSession,

@@ -147,6 +147,9 @@ class ChannelSecuritySettings(Base):
         String(16), default="fail_open", server_default="fail_open"
     )
     social_pending_score_threshold: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    social_external_api_enabled: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="0"
+    )
     admin_ops_chat_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     wizard_completed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True

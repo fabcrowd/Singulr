@@ -13,19 +13,24 @@ from telegram.constants import ChatType
 from singulr.bot.security_wizard import (
     WIZARD_CHANNEL_KEY,
     WIZARD_EVASION_KEY,
+    WIZARD_INSTANT_BAN_KEY,
     WIZARD_NET_CATEGORIES_KEY,
     WIZARD_NETWORK_MODE_KEY,
     WIZARD_OPS_KEY,
     WIZARD_PRESET_KEY,
+    WIZARD_SOCIAL_EXTERNAL_KEY,
+    WIZARD_SOCIAL_PROFILING_KEY,
     WizardState,
     confirm_selected,
     delta_selected,
     evasion_selected,
+    instant_ban_selected,
     network_categories_selected,
     network_mode_selected,
     ops_selected,
     preset_selected,
     security_command,
+    social_selected,
 )
 from singulr.config import get_settings
 from singulr.models import ChannelSecuritySettings
@@ -92,7 +97,7 @@ async def test_security_rejects_non_admin(monkeypatch: pytest.MonkeyPatch) -> No
 
 @pytest.mark.asyncio
 async def test_wizard_state_transitions_to_confirm() -> None:
-    """Preset → evasion → ops → network → categories → confirm."""
+    """Preset through social settings reaches confirm."""
     context = MagicMock()
     context.user_data = {WIZARD_CHANNEL_KEY: 100, WIZARD_PRESET_KEY: "balanced"}
 
@@ -122,11 +127,20 @@ async def test_wizard_state_transitions_to_confirm() -> None:
     context.user_data[WIZARD_NET_CATEGORIES_KEY] = {"scam_fraud", "spam"}
     cat_update = _callback_update("sec_cat_done")
     state = await network_categories_selected(cat_update, context)
+    assert state == WizardState.INSTANT_BAN
+
+    ib_update = _callback_update("sec_ib_done")
+    state = await instant_ban_selected(ib_update, context)
+    assert state == WizardState.SOCIAL
+
+    soc_update = _callback_update("sec_soc_done")
+    state = await social_selected(soc_update, context)
     assert state == WizardState.CONFIRM
-    cat_update.callback_query.edit_message_text.assert_awaited()
-    summary = cat_update.callback_query.edit_message_text.await_args.args[0]
+    soc_update.callback_query.edit_message_text.assert_awaited()
+    summary = soc_update.callback_query.edit_message_text.await_args.args[0]
     assert "read_write" in summary
     assert "scam_fraud" in summary
+    assert "Social profiling" in summary
 
 
 @pytest.mark.asyncio
@@ -144,7 +158,7 @@ async def test_upsert_persists_wizard_completed_at(db_session: AsyncSession) -> 
 
     assert row.security_preset == "strict"
     assert row.wizard_completed_at is not None
-    assert row.wizard_version == 2
+    assert row.wizard_version == 3
     assert row.network_registry_mode == "read_write"
     assert row.share_bans_to_network is True
     assert row.network_auto_reject_categories == ["scam_fraud", "raid_coordination"]
@@ -190,6 +204,9 @@ async def test_confirm_persists_settings(db_session: AsyncSession, monkeypatch: 
         WIZARD_OPS_KEY: -100999,
         WIZARD_NETWORK_MODE_KEY: "read",
         WIZARD_NET_CATEGORIES_KEY: {"harassment", "scam_fraud"},
+        WIZARD_INSTANT_BAN_KEY: {"impersonation", "bot_abuse"},
+        WIZARD_SOCIAL_PROFILING_KEY: True,
+        WIZARD_SOCIAL_EXTERNAL_KEY: False,
     }
     update = _callback_update("sec_confirm_yes")
 
@@ -205,7 +222,7 @@ async def test_confirm_persists_settings(db_session: AsyncSession, monkeypatch: 
     assert row is not None
     assert row.security_preset == "balanced"
     assert row.wizard_completed_at is not None
-    assert row.wizard_version == 2
+    assert row.wizard_version == 3
     assert row.network_registry_mode == "read"
     assert set(row.network_auto_reject_categories or []) == {"harassment", "scam_fraud"}
 
@@ -260,12 +277,12 @@ async def test_delta_prompt_when_wizard_version_one(
 
     assert state == WizardState.DELTA
     text = update.message.reply_text.await_args.args[0]
-    assert "network" in text.lower()
+    assert "social" in text.lower()
 
 
 @pytest.mark.asyncio
-async def test_delta_new_skips_to_network_mode(db_session: AsyncSession) -> None:
-    """Delta path jumps to network registry questions only."""
+async def test_delta_new_skips_to_instant_ban(db_session: AsyncSession) -> None:
+    """Delta path jumps to new social profiling questions only."""
     from datetime import UTC, datetime
 
     row = ChannelSecuritySettings(
@@ -289,5 +306,5 @@ async def test_delta_new_skips_to_network_mode(db_session: AsyncSession) -> None
         session_local.return_value.__aexit__ = AsyncMock(return_value=False)
         state = await delta_selected(update, context)
 
-    assert state == WizardState.NETWORK_MODE
+    assert state == WizardState.INSTANT_BAN
     assert context.user_data[WIZARD_PRESET_KEY] == "open"

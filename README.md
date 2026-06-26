@@ -117,6 +117,21 @@ Users type exactly:
 
 Mobile and desktop keystroke profiles are stored separately.
 
+## Social profiling
+
+Join verification runs **Telegram-native heuristics** (username patterns, display-name overlap with channel title) when social profiling is enabled for the channel. Outcomes:
+
+| Signal strength | Verify decision |
+|-----------------|-----------------|
+| Risk score ≥ channel threshold (default 40) | Pending admin review |
+| Hard category in instant-ban list (e.g. `bot_abuse`) | Auto-ban |
+
+**Self-hosted blocklist** — copy `data/social_blocklist.example.json`, add known bad `telegram_user_id` entries, set `SOCIAL_BLOCKLIST_PATH` in `.env`.
+
+**External HTTP API** — set `SOCIAL_API_URL` and `SOCIAL_API_KEY`; each channel must **opt in** via `/security` wizard (question 7: External API). The API receives `telegram_user_id`, `username`, and `display_name` only — never fingerprint or IP data.
+
+Configure instant-ban categories and social toggles in the private-chat **`/security`** wizard (v3).
+
 ## Project layout
 
 ```

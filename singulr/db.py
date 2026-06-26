@@ -48,6 +48,8 @@ async def _apply_schema_patches(conn) -> None:
             "ALTER TABLE channel_security_settings ADD COLUMN IF NOT EXISTS social_profiling_enabled BOOLEAN DEFAULT TRUE",
             "ALTER TABLE channel_security_settings ADD COLUMN IF NOT EXISTS social_api_fail_mode VARCHAR(16) DEFAULT 'fail_open'",
             "ALTER TABLE channel_security_settings ADD COLUMN IF NOT EXISTS social_pending_score_threshold INTEGER",
+            "ALTER TABLE channel_security_settings ADD COLUMN IF NOT EXISTS social_pending_score_threshold INTEGER",
+            "ALTER TABLE channel_security_settings ADD COLUMN IF NOT EXISTS social_external_api_enabled BOOLEAN DEFAULT FALSE",
             "ALTER TABLE channel_security_settings ADD COLUMN IF NOT EXISTS wizard_version INTEGER DEFAULT 1",
             "ALTER TABLE tokens ADD COLUMN IF NOT EXISTS join_username VARCHAR(64)",
             "ALTER TABLE tokens ADD COLUMN IF NOT EXISTS join_display_name VARCHAR(256)",
@@ -104,6 +106,12 @@ async def _apply_schema_patches(conn) -> None:
         await conn.execute(
             text(
                 "ALTER TABLE channel_security_settings ADD COLUMN social_pending_score_threshold INTEGER"
+            )
+        )
+    if settings_cols and "social_external_api_enabled" not in settings_cols:
+        await conn.execute(
+            text(
+                "ALTER TABLE channel_security_settings ADD COLUMN social_external_api_enabled BOOLEAN DEFAULT 0"
             )
         )
     if settings_cols and "wizard_version" not in settings_cols:

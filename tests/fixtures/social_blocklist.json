@@ -1,0 +1,14 @@
+{
+  "entries": [
+    {
+      "telegram_user_id": 990001,
+      "category": "scam_fraud",
+      "reason": "fixture known scammer"
+    },
+    {
+      "telegram_user_id": 990002,
+      "category": "bot_abuse",
+      "reason": "fixture bot farm"
+    }
+  ]
+}

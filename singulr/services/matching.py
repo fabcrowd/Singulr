@@ -95,6 +95,7 @@ async def _resolve_effective_policy(
         social_profiling_enabled=settings.default_social_profiling_enabled,
         social_api_fail_mode=settings.default_social_api_fail_mode,
         social_pending_score_threshold=settings.default_social_pending_score_threshold,
+        social_external_api_enabled=False,
         admin_ops_chat_id=settings.log_channel_id or None,
     )
 

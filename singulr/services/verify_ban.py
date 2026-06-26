@@ -11,6 +11,14 @@ def block_ban_taxonomy(result: MatchResult) -> tuple[BanCategory, BanSeverity, s
     reason_lower = result.reason.lower()
     factors = " ".join(result.risk_factors).lower()
 
+    for factor in result.risk_factors:
+        if factor.startswith("social_hard:"):
+            category_value = factor.split(":", 1)[1]
+            try:
+                return BanCategory(category_value), BanSeverity.HIGH, result.reason
+            except ValueError:
+                pass
+
     if "impersonation" in reason_lower or "impersonation" in factors:
         return BanCategory.IMPERSONATION, BanSeverity.HIGH, result.reason
     if "bot" in reason_lower or "bot_abuse" in factors:

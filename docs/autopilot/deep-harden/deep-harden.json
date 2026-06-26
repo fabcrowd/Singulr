@@ -1,0 +1,73 @@
+{
+  "$schema": "https://raw.githubusercontent.com/Gens-ai/autopilot/main/tasks.schema.json",
+  "name": "deep-harden",
+  "description": "Overnight deep debugging and production hardening: critical bug hunt, security paths, regression locks",
+  "goals": [
+    "Find and fix critical correctness bugs in recent verify/bot/social changes",
+    "Harden auth, rate limits, and fail-closed paths with regression tests",
+    "Document audit findings and keep verify.ps1 green"
+  ],
+  "nonGoals": [
+    "Style refactors",
+    "New product features",
+    "Live Telegram E2E automation"
+  ],
+  "_tdd": true,
+  "requirements": [
+    {
+      "id": "1",
+      "category": "security",
+      "description": "Deep bug hunt on recent join/verify/social diff \u2014 fix critical issues with tests",
+      "acceptance": [
+        "docs/autopilot/deep-harden/audit.md exists with severity sections",
+        "Any critical finding has minimal fix + regression test",
+        "scripts/verify.ps1 green"
+      ],
+      "passes": true
+    },
+    {
+      "id": "2",
+      "category": "security",
+      "description": "Harden verify submit: token reuse race, cache poisoning, and fail-closed social paths",
+      "acceptance": [
+        "tests cover mark_token_used ordering and social fail_closed pending",
+        "No double-submit approve without token invalidation",
+        "pytest passes"
+      ],
+      "passes": true
+    },
+    {
+      "id": "3",
+      "category": "security",
+      "description": "Harden external API provider: timeout, no secret logging, malformed JSON fail-safe",
+      "acceptance": [
+        "ExternalApiProvider never logs SOCIAL_API_KEY",
+        "Malformed JSON raises SocialProfileProviderError not crash",
+        "tests/test_social_external.py covers malformed response"
+      ],
+      "passes": true
+    },
+    {
+      "id": "4",
+      "category": "security",
+      "description": "Admin callback auth: details/permit/deny only from ops channel admins",
+      "acceptance": [
+        "handlers reject callback when user is not channel admin where checkable",
+        "tests/test_bot_ops_workflow.py or test_admin_callbacks.py covers rejection",
+        "verify.ps1 green"
+      ],
+      "passes": true
+    },
+    {
+      "id": "5",
+      "category": "ship",
+      "description": "Hardening report and lessons",
+      "acceptance": [
+        "docs/autopilot/deep-harden/HARDEN_REPORT.md exists",
+        "tasks/lessons.md updated if fixes landed",
+        "scripts/verify.ps1 green"
+      ],
+      "passes": true
+    }
+  ]
+}

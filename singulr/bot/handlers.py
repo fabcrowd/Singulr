@@ -207,6 +207,18 @@ async def on_channel_message(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await session.commit()
 
 
+async def _require_ops_admin(query, channel_id: int) -> bool:
+    """Return True when callback sender is an administrator of the target channel."""
+    user = query.from_user
+    if not user:
+        return False
+    try:
+        member = await query.get_bot().get_chat_member(channel_id, user.id)
+    except Exception:  # noqa: BLE001
+        return False
+    return member.status in {"administrator", "creator"}
+
+
 async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle inline approve/ban from log channel."""
     query = update.callback_query
@@ -223,12 +235,20 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             await query.message.reply_text(f"Approved user {user_id}")
     elif data.startswith("permit_"):
         channel_id, user_id = _parse_channel_user_callback(data.removeprefix("permit_"))
+        if not await _require_ops_admin(query, channel_id):
+            if query.message:
+                await query.message.reply_text("Only channel administrators can use this action.")
+            return
         await grant_access(context.application, channel_id, user_id)
         await notify_user_result(context.application, user_id, approved=True)
         if query.message:
             await query.message.reply_text(f"Permitted user {user_id}")
     elif data.startswith("deny_"):
         channel_id, user_id = _parse_channel_user_callback(data.removeprefix("deny_"))
+        if not await _require_ops_admin(query, channel_id):
+            if query.message:
+                await query.message.reply_text("Only channel administrators can use this action.")
+            return
         await ban_member(context.application, channel_id, user_id)
         await notify_user_denied(
             context.application,
@@ -239,6 +259,10 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             await query.message.reply_text(f"Denied user {user_id}")
     elif data.startswith("details_"):
         channel_id, user_id = _parse_channel_user_callback(data.removeprefix("details_"))
+        if not await _require_ops_admin(query, channel_id):
+            if query.message:
+                await query.message.reply_text("Only channel administrators can use this action.")
+            return
         fingerprint_hash = None
         social_summary = None
         social_signals: list[str] = []

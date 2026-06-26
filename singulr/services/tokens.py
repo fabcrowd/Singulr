@@ -5,7 +5,7 @@ from __future__ import annotations
 import secrets
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from singulr.config import get_settings
@@ -95,9 +95,34 @@ async def validate_token(session: AsyncSession, token: str) -> VerificationToken
     return row
 
 
-async def mark_token_used(session: AsyncSession, token: str) -> None:
-    """Mark token as consumed."""
+async def claim_verification_token(session: AsyncSession, token: str) -> VerificationToken | None:
+    """Atomically consume a valid token; None if missing, expired, or already used."""
+    now = datetime.now(UTC)
+    result = await session.execute(
+        update(VerificationToken)
+        .where(
+            VerificationToken.token == token,
+            VerificationToken.used.is_(False),
+        )
+        .values(used=True)
+    )
+    if result.rowcount == 0:
+        return None
     row = await session.scalar(select(VerificationToken).where(VerificationToken.token == token))
-    if row:
+    if row is None:
+        return None
+    expires = row.expires_at.replace(tzinfo=UTC) if row.expires_at.tzinfo is None else row.expires_at
+    if expires < now:
+        row.used = True
+        await session.flush()
+        return None
+    await session.flush()
+    return row
+
+
+async def mark_token_used(session: AsyncSession, token: str) -> None:
+    """Mark token as consumed (idempotent if already marked)."""
+    row = await session.scalar(select(VerificationToken).where(VerificationToken.token == token))
+    if row and not row.used:
         row.used = True
         await session.commit()

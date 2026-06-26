@@ -24,7 +24,7 @@ from singulr.services.keystroke import build_keystroke_profile
 from singulr.services.matching import Decision, MatchResult, check_known_bad
 from singulr.services.reverification import STATUS_APPROVED, get_profile, is_reverification_required
 from singulr.services.rate_limit import allow_verify_request
-from singulr.services.tokens import mark_token_used, validate_token
+from singulr.services.tokens import validate_token, claim_verification_token
 from singulr.services.verify_ban import block_ban_taxonomy
 
 router = APIRouter(prefix="/api", tags=["verify"])
@@ -222,7 +222,7 @@ async def submit(
     if body.typed_text.strip() != VERIFICATION_SENTENCE:
         raise HTTPException(status_code=400, detail="sentence_mismatch")
 
-    token_row = await validate_token(session, body.token)
+    token_row = await claim_verification_token(session, body.token)
     if not token_row:
         raise HTTPException(status_code=410, detail="link_expired")
 
@@ -249,8 +249,6 @@ async def submit(
         policy=policy,
         token_row=token_row,
     )
-
-    await mark_token_used(session, body.token)
 
     session.add(
         IPSession(

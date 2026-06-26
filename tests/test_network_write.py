@@ -26,6 +26,7 @@ def _write_policy(**overrides: object) -> EffectivePolicy:
         "social_profiling_enabled": True,
         "social_api_fail_mode": "fail_open",
         "social_pending_score_threshold": 40,
+        "social_external_api_enabled": False,
         "admin_ops_chat_id": None,
     }
     base.update(overrides)

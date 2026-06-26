@@ -1,0 +1,50 @@
+{
+  "$schema": "https://raw.githubusercontent.com/Gens-ai/autopilot/main/tasks.schema.json",
+  "name": "overnight-continue",
+  "description": "Post social-profiling ship: env docs, example blocklist, deploy notes, ship report",
+  "goals": [
+    "Document SOCIAL_* configuration for operators",
+    "Provide example blocklist file for self-hosted scoring",
+    "Publish overnight ship report when all packs green"
+  ],
+  "nonGoals": [
+    "New product features",
+    "Commercial vendor integration"
+  ],
+  "_tdd": true,
+  "requirements": [
+    {
+      "id": "1",
+      "category": "docs",
+      "description": "Document social profiling env vars in .env.example and README",
+      "acceptance": [
+        ".env.example documents SOCIAL_BLOCKLIST_PATH SOCIAL_API_URL SOCIAL_API_KEY",
+        "README has Social profiling section describing blocklist and external API opt-in",
+        "tests/test_social_docs.py passes"
+      ],
+      "passes": true
+    },
+    {
+      "id": "2",
+      "category": "docs",
+      "description": "Example blocklist file and DEPLOY.md operator notes",
+      "acceptance": [
+        "data/social_blocklist.example.json exists",
+        "docs/DEPLOY.md mentions social blocklist and /security wizard v3",
+        "tests/test_social_docs.py passes"
+      ],
+      "passes": true
+    },
+    {
+      "id": "3",
+      "category": "ship",
+      "description": "Overnight ship report with verify count and pack status",
+      "acceptance": [
+        "docs/autopilot/overnight-continue/SHIP_REPORT.md exists",
+        "tests/test_social_docs.py asserts report mentions verify.ps1",
+        "scripts/verify.ps1 green"
+      ],
+      "passes": true
+    }
+  ]
+}

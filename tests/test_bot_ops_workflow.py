@@ -18,6 +18,22 @@ def _mock_app() -> MagicMock:
     return app
 
 
+def _mock_ops_admin_query(data: str) -> MagicMock:
+    """Build callback query mock where sender is channel administrator."""
+    query = MagicMock()
+    query.data = data
+    query.answer = AsyncMock()
+    query.from_user = MagicMock()
+    query.from_user.id = 1
+    query.get_bot = MagicMock()
+    query.get_bot.return_value.get_chat_member = AsyncMock(
+        return_value=MagicMock(status="administrator")
+    )
+    query.message = MagicMock()
+    query.message.reply_text = AsyncMock()
+    return query
+
+
 @pytest.mark.asyncio
 async def test_log_to_ops_channel_uses_env_admin_ops_chat_id(monkeypatch: pytest.MonkeyPatch) -> None:
     """log_to_ops_channel posts to ADMIN_OPS_CHAT_ID when configured."""
@@ -121,11 +137,7 @@ async def test_permit_callback_grants_access_and_dms_user(monkeypatch: pytest.Mo
     monkeypatch.setattr("singulr.bot.handlers.grant_access", grant_access)
     monkeypatch.setattr("singulr.bot.handlers.notify_user_result", notify)
 
-    query = MagicMock()
-    query.data = "permit_42_701"
-    query.answer = AsyncMock()
-    query.message = MagicMock()
-    query.message.reply_text = AsyncMock()
+    query = _mock_ops_admin_query("permit_42_701")
     update = MagicMock()
     update.callback_query = query
     context = MagicMock()
@@ -145,11 +157,7 @@ async def test_deny_callback_dms_denial_reason(monkeypatch: pytest.MonkeyPatch) 
     monkeypatch.setattr("singulr.bot.handlers.ban_member", ban_member)
     monkeypatch.setattr("singulr.bot.handlers.notify_user_denied", notify_denied)
 
-    query = MagicMock()
-    query.data = "deny_42_702"
-    query.answer = AsyncMock()
-    query.message = MagicMock()
-    query.message.reply_text = AsyncMock()
+    query = _mock_ops_admin_query("deny_42_702")
     update = MagicMock()
     update.callback_query = query
     context = MagicMock()
