@@ -48,3 +48,30 @@ async def test_permit_callback_rejects_non_admin(monkeypatch: pytest.MonkeyPatch
     grant.assert_not_awaited()
     query.message.reply_text.assert_awaited_once()
     assert "administrator" in query.message.reply_text.await_args.args[0].lower()
+
+
+@pytest.mark.asyncio
+async def test_approve_callback_rejects_non_admin(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Non-admin cannot approve via legacy approve_ callback."""
+    query = MagicMock()
+    query.data = "approve_701"
+    query.answer = AsyncMock()
+    query.from_user = MagicMock()
+    query.from_user.id = 999
+    query.get_bot = MagicMock()
+    query.get_bot.return_value.get_chat_member = AsyncMock(
+        return_value=MagicMock(status="member")
+    )
+    query.message = MagicMock()
+    query.message.reply_text = AsyncMock()
+    update = MagicMock()
+    update.callback_query = query
+    context = MagicMock()
+    context.application = MagicMock()
+
+    grant = AsyncMock()
+    monkeypatch.setattr("singulr.bot.handlers.grant_access", grant)
+    await on_callback(update, context)
+
+    grant.assert_not_awaited()
+    query.message.reply_text.assert_awaited_once()

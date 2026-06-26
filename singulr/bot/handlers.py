@@ -229,6 +229,10 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     data = query.data
     if data.startswith("approve_"):
         user_id = int(data.removeprefix("approve_"))
+        if not await _require_ops_admin(query, settings.channel_id):
+            if query.message:
+                await query.message.reply_text("Only channel administrators can use this action.")
+            return
         await grant_access(context.application, settings.channel_id, user_id)
         await notify_user_result(context.application, user_id, approved=True)
         if query.message:
@@ -321,6 +325,10 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         if query.message:
             await query.message.reply_text(body)
     elif data.startswith("ban_sev_"):
+        if not await _require_ops_admin(query, settings.channel_id):
+            if query.message:
+                await query.message.reply_text("Only channel administrators can use this action.")
+            return
         severity = parse_ban_severity(data)
         user_id = context.user_data.pop(PENDING_BAN_USER_KEY, None)
         category_value = context.user_data.pop(PENDING_BAN_CATEGORY_KEY, None)
@@ -350,6 +358,10 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                 f"Banned user {user_id} ({category.value}/{severity.value})."
             )
     elif data.startswith("ban_cat_"):
+        if not await _require_ops_admin(query, settings.channel_id):
+            if query.message:
+                await query.message.reply_text("Only channel administrators can use this action.")
+            return
         category = parse_ban_category(data)
         if category is None or PENDING_BAN_USER_KEY not in context.user_data:
             if query.message:
@@ -362,6 +374,10 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                 reply_markup=severity_keyboard(),
             )
     elif (user_id := parse_ban_user_id(data)) is not None:
+        if not await _require_ops_admin(query, settings.channel_id):
+            if query.message:
+                await query.message.reply_text("Only channel administrators can use this action.")
+            return
         context.user_data[PENDING_BAN_USER_KEY] = user_id
         if query.message:
             await query.message.reply_text(

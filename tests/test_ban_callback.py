@@ -19,6 +19,12 @@ def _callback_context() -> tuple[MagicMock, MagicMock]:
     """Build mocked update/context for callback tests."""
     query = MagicMock()
     query.answer = AsyncMock()
+    query.from_user = MagicMock()
+    query.from_user.id = 1
+    query.get_bot = MagicMock()
+    query.get_bot.return_value.get_chat_member = AsyncMock(
+        return_value=MagicMock(status="administrator")
+    )
     query.message = MagicMock()
     query.message.reply_text = AsyncMock()
     query.message.edit_message_reply_markup = AsyncMock()

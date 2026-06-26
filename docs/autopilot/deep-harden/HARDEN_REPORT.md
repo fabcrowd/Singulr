@@ -29,7 +29,6 @@ Overnight deep debugging and hardening pass on verify submit, bot admin callback
 
 ## Residual watch items
 
-- Legacy `approve_` callback still has no channel admin gate (deprecated path).
 - Expired token claim consumes token without processing (acceptable one-shot semantics).
 
 ## Verification

@@ -35,7 +35,14 @@
 ## Medium (watch)
 
 - **Expired token claim:** Claim marks `used=True` before expiry re-check; expired tokens become consumed without processing (acceptable one-shot semantics).
-- **approve_ legacy callback:** Still lacks channel admin check (legacy path); consider deprecating.
+
+### M1 — Legacy approve_/ban_ callbacks lacked admin check (FIXED)
+
+**Impact:** WATCHER_MATCH log-channel Approve/Ban buttons could be used by any member who saw the message.
+
+**Fix:** `_require_ops_admin()` on `approve_`, `ban_`, `ban_cat_`, and `ban_sev_` handlers.
+
+**Test:** `tests/test_hardening.py::test_approve_callback_rejects_non_admin`
 
 ## Low / no action
 
