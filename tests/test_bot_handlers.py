@@ -5,11 +5,14 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 from telegram import Chat, Update, User
 from telegram.constants import ChatType
 
-from singulr.bot.handlers import apply_verification_decision, on_join_request, start_command
+from singulr.bot.handlers import apply_verification_decision, on_channel_message, on_join_request, start_command
 from singulr.config import get_settings
+from singulr.models import MessageLog, StylometryProfile
 from singulr.services.tokens import TokenRateLimitError
 
 
@@ -176,3 +179,35 @@ async def test_start_command_handles_token_rate_limit(monkeypatch: pytest.Monkey
 
     message.reply_text.assert_awaited_once()
     assert "too many" in message.reply_text.await_args.args[0].lower()
+
+
+@pytest.mark.asyncio
+async def test_on_channel_message_logs_stylometry_profile(
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Channel text messages update MessageLog and StylometryProfile for The Watcher."""
+    monkeypatch.setenv("CHANNEL_ID", "-100300")
+    get_settings.cache_clear()
+
+    user = User(id=8001, is_bot=False, first_name="Poster")
+    chat = Chat(id=-100300, type=ChatType.CHANNEL)
+    message = MagicMock()
+    message.text = "Hello this is a test message for the channel watcher today."
+    update = MagicMock()
+    update.effective_message = message
+    update.effective_user = user
+    update.effective_chat = chat
+    context = MagicMock()
+
+    with patch("singulr.bot.handlers.SessionLocal") as session_local:
+        session_local.return_value.__aenter__ = AsyncMock(return_value=db_session)
+        session_local.return_value.__aexit__ = AsyncMock(return_value=False)
+        await on_channel_message(update, context)
+
+    log_count = await db_session.scalar(select(func.count()).select_from(MessageLog))
+    profile = await db_session.get(StylometryProfile, 8001)
+    assert log_count == 1
+    assert profile is not None
+    assert profile.message_count == 1
+    assert profile.feature_vector

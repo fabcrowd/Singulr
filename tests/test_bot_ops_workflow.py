@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from sqlalchemy.ext.asyncio import AsyncSession
+from telegram import User
 
 from singulr.bot.handlers import apply_verification_decision, on_callback
 from singulr.config import get_settings
+from singulr.models import Profile
+from singulr.services.social_profile import SocialProfileResult
 from singulr.services.telegram_actions import log_to_ops_channel
 
 
@@ -193,3 +197,86 @@ async def test_deny_callback_dms_denial_reason(monkeypatch: pytest.MonkeyPatch) 
     notify_denied.assert_awaited_once()
     assert notify_denied.await_args.args[1] == 702
     assert "denied" in notify_denied.await_args.args[2].lower()
+
+
+@pytest.mark.asyncio
+async def test_details_callback_replies_with_profile_for_admin(
+    db_session: AsyncSession,
+) -> None:
+    """More details callback posts expanded admin profile card."""
+    db_session.add(
+        Profile(
+            telegram_user_id=701,
+            fingerprint_hash="0x" + "a" * 64,
+            keystroke_profile={"rhythm": [1.0]},
+            device_type="mobile",
+        )
+    )
+    await db_session.commit()
+
+    target_user = User(id=701, is_bot=False, first_name="Target", username="targetuser")
+    query = _mock_ops_admin_query("details_42_701")
+    update = MagicMock()
+    update.callback_query = query
+    context = MagicMock()
+    context.application = _mock_app()
+    context.application.bot.get_chat_member = AsyncMock(
+        return_value=MagicMock(user=target_user)
+    )
+    context.application.bot.get_chat = AsyncMock(return_value=MagicMock(title="Test Channel"))
+    social = SocialProfileResult(
+        risk_score=10,
+        soft_signals=["new_account"],
+        summary="Telegram account looks new",
+        sources=["telegram"],
+    )
+
+    with patch("singulr.bot.handlers.SessionLocal") as session_local:
+        session_local.return_value.__aenter__ = AsyncMock(return_value=db_session)
+        session_local.return_value.__aexit__ = AsyncMock(return_value=False)
+        with patch(
+            "singulr.bot.handlers.analyze_social_profile",
+            new_callable=AsyncMock,
+            return_value=social,
+        ):
+            with patch(
+                "singulr.bot.handlers.get_channel_title",
+                new_callable=AsyncMock,
+                return_value="Test Channel",
+            ):
+                with patch(
+                    "singulr.bot.handlers._ban_history_for_fingerprint",
+                    AsyncMock(return_value=None),
+                ):
+                    await on_callback(update, context)
+
+    query.message.reply_text.assert_awaited_once()
+    body = query.message.reply_text.await_args.args[0]
+    assert "701" in body
+    assert "@targetuser" in body
+    assert "Social profile: Telegram account looks new" in body
+
+
+@pytest.mark.asyncio
+async def test_details_callback_rejects_non_admin() -> None:
+    """Non-admins cannot fetch the expanded profile card."""
+    query = MagicMock()
+    query.data = "details_42_703"
+    query.answer = AsyncMock()
+    query.from_user = MagicMock()
+    query.from_user.id = 99
+    query.get_bot = MagicMock()
+    query.get_bot.return_value.get_chat_member = AsyncMock(
+        return_value=MagicMock(status="member")
+    )
+    query.message = MagicMock()
+    query.message.reply_text = AsyncMock()
+    update = MagicMock()
+    update.callback_query = query
+    context = MagicMock()
+    context.application = _mock_app()
+
+    await on_callback(update, context)
+
+    query.message.reply_text.assert_awaited_once()
+    assert "administrators" in query.message.reply_text.await_args.args[0].lower()
