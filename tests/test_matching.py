@@ -133,6 +133,35 @@ async def test_approves_clean_user(db_session: AsyncSession) -> None:
 
 
 @pytest.mark.asyncio
+async def test_webdriver_forces_pending_under_strict_automation_mode(
+    db_session: AsyncSession,
+) -> None:
+    """Webdriver with pending automation policy escalates to admin review."""
+    from dataclasses import replace
+
+    policy = replace(
+        _DEFAULT_POLICY,
+        security_preset="strict",
+        automation_flag_mode="pending",
+        ai_pending_score_threshold=25,
+    )
+
+    result = await check_known_bad(
+        db_session,
+        _chain_mock(),
+        telegram_user_id=334,
+        fingerprint_hash="0x" + "f" * 64,
+        ip_hash=None,
+        env_flags={"webdriver": True, "headless_ua": False},
+        policy=policy,
+    )
+
+    assert result.decision == Decision.PENDING
+    assert "automation_score:30" in result.risk_factors
+    assert result.reason == "Automation review required"
+
+
+@pytest.mark.asyncio
 async def test_blocks_high_keystroke_ban_evasion_on_new_user_id(db_session: AsyncSession) -> None:
     """High keystroke similarity to a banned profile on a new user id auto-denies."""
     fingerprint = "0x" + "e" * 64

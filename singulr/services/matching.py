@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from singulr.config import get_settings
 from singulr.models import Ban, IPSession, Profile, VerificationToken
+from singulr.services.automation_score import compute_automation_score, resolve_automation_outcome
 from singulr.services.blockchain import ChainClient
 from singulr.services.channel_policy import (
     DEFAULT_INSTANT_BAN_CATEGORIES,
@@ -253,6 +254,18 @@ async def check_known_bad(
 
     if keystroke_profile:
         factors.extend(keystroke_risk_factors_from_profile(keystroke_profile))
+
+    automation_score = compute_automation_score(env_flags, factors)
+    if automation_score > 0:
+        factors.append(f"automation_score:{automation_score}")
+    automation_outcome = resolve_automation_outcome(
+        automation_score,
+        policy=effective_policy,
+    )
+    if automation_outcome is not None:
+        if automation_outcome.action == "block":
+            return MatchResult(Decision.BLOCK, automation_outcome.reason, factors)
+        return MatchResult(Decision.PENDING, automation_outcome.reason, factors)
 
     bans = (
         await session.scalars(select(Ban).where(Ban.status == "active"))

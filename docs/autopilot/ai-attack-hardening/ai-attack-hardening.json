@@ -91,7 +91,7 @@
         "tests/test_matching.py covers webdriver pending under strict automation mode",
         "pytest passes"
       ],
-      "passes": false
+      "passes": true
     },
     {
       "id": "7",

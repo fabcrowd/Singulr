@@ -51,6 +51,10 @@ class EnvFlags(BaseModel):
 
     webdriver: bool = False
     headless_ua: bool = False
+    plugins_count: int | None = None
+    languages_count: int | None = None
+    webgl_renderer: str | None = None
+    outer_dims_zero: bool = False
 
 
 class SubmitBody(BaseModel):

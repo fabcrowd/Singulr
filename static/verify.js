@@ -40,11 +40,49 @@ function collectEnvFlags() {
 
   const ua = navigator.userAgent || "";
 
+  let webglRenderer = null;
+
+  try {
+
+    const canvas = document.createElement("canvas");
+
+    const gl =
+
+      canvas.getContext("webgl") || canvas.getContext("experimental-webgl");
+
+    if (gl) {
+
+      const debugInfo = gl.getExtension("WEBGL_debug_renderer_info");
+
+      if (debugInfo) {
+
+        webglRenderer = gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL);
+
+      }
+
+    }
+
+  } catch (err) {
+
+    console.warn("WebGL probe unavailable", err);
+
+  }
+
+
+
   return {
 
     webdriver: Boolean(navigator.webdriver),
 
     headless_ua: /HeadlessChrome/i.test(ua),
+
+    plugins_count: navigator.plugins ? navigator.plugins.length : 0,
+
+    languages_count: navigator.languages ? navigator.languages.length : 0,
+
+    webgl_renderer: webglRenderer,
+
+    outer_dims_zero: window.outerWidth === 0 && window.outerHeight === 0,
 
   };
 
