@@ -6,16 +6,11 @@ import math
 from typing import Any
 
 from singulr.services.hashing import hash_payload
-
-
-def extract_flight_times(keystrokes: list[dict[str, Any]]) -> list[float]:
-    """Extract inter-key flight times in milliseconds from raw events."""
-    flights: list[float] = []
-    for event in keystrokes:
-        flight = event.get("flight")
-        if flight is not None and isinstance(flight, (int, float)):
-            flights.append(float(flight))
-    return flights
+from singulr.services.keystroke_validation import (
+    extract_flight_times,
+    flight_coefficient_of_variation,
+    typing_duration_ms,
+)
 
 
 def rhythm_vector(keystrokes: list[dict[str, Any]], max_len: int = 64) -> list[float]:
@@ -67,6 +62,8 @@ def build_keystroke_profile(
         "error_count": error_count,
         "hold_avg": sum(hold_times) / len(hold_times) if hold_times else None,
         "flight_avg": sum(flights) / len(flights) if flights else None,
+        "flight_cv": flight_coefficient_of_variation(flights),
+        "duration_ms": typing_duration_ms(keystrokes),
         "keystroke_count": len(keystrokes),
     }
     profile["rhythm_hash"] = hash_payload({"rhythm": profile["rhythm"], "device_type": device_type})

@@ -16,9 +16,13 @@ from singulr.services.tokens import create_token
 from verify_helpers import challenge_proof_for
 
 _SAMPLE_KEYSTROKES = [
-    {"key": "W", "down": 0, "up": 80, "flight": 0},
-    {"key": "e", "down": 120, "up": 190, "flight": 40},
-    {"key": "l", "down": 250, "up": 310, "flight": 60},
+    {"key": "W", "down": 0, "up": 90, "flight": 0},
+    {"key": "e", "down": 180, "up": 260, "flight": 90},
+    {"key": "l", "down": 420, "up": 500, "flight": 160},
+    {"key": "c", "down": 900, "up": 980, "flight": 400},
+    {"key": "o", "down": 1500, "up": 1580, "flight": 520},
+    {"key": "m", "down": 2400, "up": 2480, "flight": 820},
+    {"key": "e", "down": 3200, "up": 3280, "flight": 720},
 ]
 
 
@@ -33,6 +37,7 @@ def _submit_body(
     privacy_accepted: bool = True,
     env_flags: dict | None = None,
     visitor_id: str = _VISITOR_ID,
+    keystrokes: list[dict] | None = None,
 ) -> dict:
     """Build a valid submit payload with optional overrides."""
     body = {
@@ -40,7 +45,7 @@ def _submit_body(
         "visitor_id": visitor_id,
         "device_type": "desktop",
         "typed_text": typed_text if typed_text is not None else VERIFICATION_SENTENCE,
-        "keystrokes": _SAMPLE_KEYSTROKES,
+        "keystrokes": keystrokes if keystrokes is not None else _SAMPLE_KEYSTROKES,
         "privacy_accepted": privacy_accepted,
         "challenge_proof": challenge_proof,
     }
@@ -218,6 +223,92 @@ async def test_submit_visitor_id_mismatch_forces_pending(
     body = response.json()
     assert body["decision"] == "pending"
     assert "visitor_id_mismatch" in body.get("risk_factors", [])
+    mock_notify.assert_awaited_once()
+
+
+def _uniform_keystrokes(count: int = 20, flight: float = 50.0) -> list[dict]:
+    return [
+        {"key": "a", "down": i * flight, "up": i * flight + 40, "flight": flight}
+        for i in range(count)
+    ]
+
+
+def _fast_keystrokes(count: int = 20) -> list[dict]:
+    return [
+        {"key": "a", "down": i * 10, "up": i * 10 + 8, "flight": 10}
+        for i in range(count)
+    ]
+
+
+@pytest.mark.asyncio
+async def test_submit_rejects_too_many_keystrokes(
+    api_client: httpx.AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """Submit rejects payloads exceeding the keystroke event cap."""
+    token = await create_token(db_session, telegram_user_id=228, channel_id=42)
+    proof = await challenge_proof_for(api_client, token)
+    oversized = [{"key": "a", "down": 0, "up": 1, "flight": 0}] * 501
+
+    response = await api_client.post(
+        "/api/verify/submit",
+        json=_submit_body(token, challenge_proof=proof, keystrokes=oversized),
+    )
+
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+@patch("singulr.api.verify._notify_bot", new_callable=AsyncMock)
+async def test_submit_flags_synthetic_keystroke_rhythm(
+    mock_notify: AsyncMock,
+    api_client: httpx.AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """Uniform keystroke rhythm is flagged as synthetic."""
+    token = await create_token(db_session, telegram_user_id=229, channel_id=42)
+    proof = await challenge_proof_for(api_client, token)
+
+    response = await api_client.post(
+        "/api/verify/submit",
+        json=_submit_body(
+            token,
+            challenge_proof=proof,
+            keystrokes=_uniform_keystrokes(),
+        ),
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["decision"] == "flag"
+    assert "synthetic_keystroke" in body.get("risk_factors", [])
+    mock_notify.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+@patch("singulr.api.verify._notify_bot", new_callable=AsyncMock)
+async def test_submit_flags_too_fast_typing(
+    mock_notify: AsyncMock,
+    api_client: httpx.AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """Very fast typing sessions are flagged."""
+    token = await create_token(db_session, telegram_user_id=230, channel_id=42)
+    proof = await challenge_proof_for(api_client, token)
+
+    response = await api_client.post(
+        "/api/verify/submit",
+        json=_submit_body(
+            token,
+            challenge_proof=proof,
+            keystrokes=_fast_keystrokes(),
+        ),
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["decision"] == "flag"
+    assert "too_fast_verify" in body.get("risk_factors", [])
     mock_notify.assert_awaited_once()
 
 

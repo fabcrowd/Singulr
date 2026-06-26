@@ -52,7 +52,7 @@
         "tests cover too-fast and too-uniform keystroke sessions",
         "verify.ps1 green"
       ],
-      "passes": false
+      "passes": true
     },
     {
       "id": "4",

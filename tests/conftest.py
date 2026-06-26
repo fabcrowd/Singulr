@@ -5,12 +5,22 @@ from __future__ import annotations
 from collections.abc import AsyncGenerator, Callable
 
 import httpx
+import pytest
 import pytest_asyncio
 from httpx import ASGITransport
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from singulr.db import Base, get_session
 from singulr import models  # noqa: F401
+from singulr.services.rate_limit import reset_verify_limiter
+
+
+@pytest.fixture(autouse=True)
+def _clear_verify_rate_limiters() -> None:
+    """Isolate verify rate limiter state between tests."""
+    reset_verify_limiter()
+    yield
+    reset_verify_limiter()
 
 
 @pytest_asyncio.fixture

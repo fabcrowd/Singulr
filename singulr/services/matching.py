@@ -19,6 +19,7 @@ from singulr.services.channel_policy import (
     get_effective_channel_policy,
 )
 from singulr.services.keystroke import keystroke_similarity
+from singulr.services.keystroke_validation import keystroke_risk_factors_from_profile
 from singulr.services.network_reputation import (
     compute_network_score,
     network_decision_from_score,
@@ -247,6 +248,9 @@ async def check_known_bad(
 
     if _env_anomaly_detected(env_flags):
         factors.append(f"env_anomaly:+{ENV_ANOMALY_RISK}")
+
+    if keystroke_profile:
+        factors.extend(keystroke_risk_factors_from_profile(keystroke_profile))
 
     bans = (
         await session.scalars(select(Ban).where(Ban.status == "active"))

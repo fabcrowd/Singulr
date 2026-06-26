@@ -15,7 +15,7 @@ from verify_helpers import challenge_proof_for
 
 @pytest.fixture(autouse=True)
 def _clear_rate_limiter() -> None:
-    """Isolate rate limiter state between tests."""
+    """Isolate rate limiter state between tests in this module."""
     reset_verify_limiter()
     yield
     reset_verify_limiter()

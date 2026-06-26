@@ -25,6 +25,7 @@ from singulr.services.matching import Decision, MatchResult, check_known_bad
 from singulr.services.reverification import STATUS_APPROVED, get_profile, is_reverification_required
 from singulr.services.rate_limit import allow_precheck_for_token, allow_verify_request
 from singulr.services.tokens import validate_token, claim_verification_token
+from singulr.services.keystroke_validation import submit_body_too_large
 from singulr.services.verify_ban import block_ban_taxonomy
 from singulr.services.verify_session import (
     issue_challenge_secret,
@@ -58,8 +59,8 @@ class SubmitBody(BaseModel):
     visitor_id: str
     request_id: str | None = None
     device_type: str = Field(pattern="^(mobile|desktop)$")
-    typed_text: str
-    keystrokes: list[dict[str, Any]]
+    typed_text: str = Field(max_length=2048)
+    keystrokes: list[dict[str, Any]] = Field(max_length=500)
     wpm: float | None = None
     error_count: int = 0
     privacy_accepted: bool = False
@@ -258,6 +259,8 @@ async def submit(
 ) -> dict[str, Any]:
     """Process verification, notify bot, and return decision."""
     _enforce_verify_rate_limit(request)
+    if submit_body_too_large(body.model_dump()):
+        raise HTTPException(status_code=413, detail="payload_too_large")
     if not body.privacy_accepted:
         raise HTTPException(status_code=400, detail="privacy_required")
 
