@@ -12,17 +12,17 @@
   Minutes between push attempts (default 30).
 
 .PARAMETER TargetBranch
-  Remote branch to push to (default: main). Local commits stay on the current branch.
+  Remote branch(es) to push to. Default: master and main (keeps both in sync).
 
 .PARAMETER RunOnce
   Sync once and exit (no loop).
 
 .EXAMPLE
-  .\scripts\github-push-loop.ps1 -IntervalMinutes 15 -TargetBranch main
+  .\scripts\github-push-loop.ps1 -IntervalMinutes 15 -TargetBranch master,main
 #>
 param(
     [int]$IntervalMinutes = 30,
-    [string]$TargetBranch = "main",
+    [string[]]$TargetBranch = @("master", "main"),
     [switch]$RunOnce
 )
 
@@ -36,8 +36,19 @@ if ($IntervalMinutes -lt 1) {
 }
 
 function Invoke-GitHubSync {
-    $output = & powershell -NoProfile -ExecutionPolicy Bypass -File $SyncScript -TargetBranch $TargetBranch 2>&1
-    $exitCode = $LASTEXITCODE
+    $branchArgs = @()
+    foreach ($b in $TargetBranch) {
+        $branchArgs += "-TargetBranch"
+        $branchArgs += $b
+    }
+    $prevEap = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try {
+        $output = & powershell -NoProfile -ExecutionPolicy Bypass -File $SyncScript @branchArgs 2>&1
+        $exitCode = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $prevEap
+    }
     $text = ($output | Out-String).Trim()
     $pushed = $text -match "OK: synced"
     $skipped = $text -match "SKIP:"
@@ -48,7 +59,7 @@ function Invoke-GitHubSync {
 function Write-Tick {
     param([hashtable]$Result)
     $escaped = $Result.Output -replace '\\', '\\\\' -replace '"', '\"' -replace "`r?`n", ' '
-    $payload = "{`"status`":`"$($Result.Status)`",`"target`":`"$TargetBranch`",`"detail`":`"$escaped`"}"
+    $payload = "{`"status`":`"$($Result.Status)`",`"targets`":`"$($TargetBranch -join ',')`",`"detail`":`"$escaped`"}"
     Write-Output "AGENT_LOOP_TICK_github_push $payload"
 }
 
@@ -58,7 +69,7 @@ Set-Content -Path $PidFile -Value $PID
 
 Write-Host "GitHub push loop started (PID $PID)"
 Write-Host "  Interval:  ${IntervalMinutes}m"
-Write-Host "  Target:    origin/$TargetBranch"
+Write-Host "  Target:    $(($TargetBranch | ForEach-Object { "origin/$_" }) -join ', ')"
 Write-Host "  Log:       $RepoRoot\.autopilot\github-sync.log"
 Write-Host "  Stop:      .\scripts\stop-github-push-loop.ps1"
 

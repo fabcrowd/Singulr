@@ -14,7 +14,7 @@
 #>
 param(
     [switch]$DryRun,
-    [string]$TargetBranch = ""
+    [string[]]$TargetBranch = @()
 )
 
 $ErrorActionPreference = "Stop"
@@ -73,18 +73,23 @@ if (-not $branch) {
     exit 1
 }
 
+$pushTargets = @($TargetBranch | Where-Object { $_ })
+if ($pushTargets.Count -eq 0) {
+    $pushTargets = @($branch)
+}
+
 $stamp = Get-Date -Format "yyyy-MM-dd HH:mm"
 $message = "chore: sync local work $stamp"
 git commit -m $message | ForEach-Object { Write-SyncLog $_ }
 
-$pushBranch = if ($TargetBranch) { $TargetBranch } else { $branch }
-Write-SyncLog "PUSH: origin HEAD -> $pushBranch (local branch: $branch)"
-git push origin "HEAD:$pushBranch" 2>&1 | ForEach-Object { Write-SyncLog $_ }
-
-if ($LASTEXITCODE -ne 0) {
-    Write-SyncLog "ERROR: push failed (exit $LASTEXITCODE)"
-    exit $LASTEXITCODE
+foreach ($pushBranch in $pushTargets) {
+    Write-SyncLog "PUSH: origin HEAD -> $pushBranch (local branch: $branch)"
+    git push origin "HEAD:$pushBranch" 2>&1 | ForEach-Object { Write-SyncLog $_ }
+    if ($LASTEXITCODE -ne 0) {
+        Write-SyncLog "ERROR: push to $pushBranch failed (exit $LASTEXITCODE)"
+        exit $LASTEXITCODE
+    }
 }
 
-Write-SyncLog "OK: synced $($staged.Count) path(s) to origin/$pushBranch"
+Write-SyncLog "OK: synced $($staged.Count) path(s) to origin/$($pushTargets -join ',')"
 exit 0
