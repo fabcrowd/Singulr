@@ -33,6 +33,7 @@ from singulr.bot.security_wizard import (
     ops_selected,
     preset_selected,
     security_command,
+    security_cancel,
     social_selected,
 )
 from singulr.config import get_settings
@@ -395,3 +396,67 @@ async def test_delta_v3_jumps_to_automation_step(db_session: AsyncSession) -> No
 
     assert state == WizardState.AUTOMATION
     assert context.user_data[WIZARD_PRESET_KEY] == "balanced"
+
+
+@pytest.mark.asyncio
+async def test_security_cancel_does_not_persist_partial_policy(
+    db_session: AsyncSession,
+) -> None:
+    """Cancel command exits without writing channel security settings."""
+    channel_id = 88060
+    update = _private_update()
+    context = MagicMock()
+    context.user_data = {
+        WIZARD_CHANNEL_KEY: channel_id,
+        WIZARD_PRESET_KEY: "strict",
+        WIZARD_EVASION_KEY: "high_only",
+    }
+
+    result = await security_cancel(update, context)
+
+    assert result == -1
+    row = await db_session.get(ChannelSecuritySettings, channel_id)
+    assert row is None
+    assert WIZARD_CHANNEL_KEY not in context.user_data
+
+
+@pytest.mark.asyncio
+async def test_confirm_restart_does_not_persist_partial_policy(
+    db_session: AsyncSession,
+) -> None:
+    """Start over from confirm keeps the previously saved policy unchanged."""
+    channel_id = 88061
+    await upsert_channel_security_settings(
+        db_session,
+        channel_id=channel_id,
+        preset="balanced",
+        evasion_mode="high_only",
+        admin_ops_chat_id=None,
+    )
+    await db_session.commit()
+
+    context = MagicMock()
+    context.user_data = {
+        WIZARD_CHANNEL_KEY: channel_id,
+        WIZARD_PRESET_KEY: "strict",
+        WIZARD_EVASION_KEY: "review_most",
+        WIZARD_OPS_KEY: None,
+        WIZARD_NETWORK_MODE_KEY: "off",
+        WIZARD_NET_CATEGORIES_KEY: set(),
+        WIZARD_INSTANT_BAN_KEY: set(),
+        WIZARD_SOCIAL_PROFILING_KEY: True,
+        WIZARD_SOCIAL_EXTERNAL_KEY: False,
+        WIZARD_AUTOMATION_MODE_KEY: "flag",
+        WIZARD_AI_THRESHOLD_KEY: 50,
+    }
+    update = _callback_update("sec_confirm_restart")
+
+    with patch("singulr.bot.security_wizard.SessionLocal") as session_local:
+        session_local.return_value.__aenter__ = AsyncMock(return_value=db_session)
+        session_local.return_value.__aexit__ = AsyncMock(return_value=False)
+        state = await confirm_selected(update, context)
+
+    assert state == WizardState.PRESET
+    row = await db_session.get(ChannelSecuritySettings, channel_id)
+    assert row is not None
+    assert row.security_preset == "balanced"
