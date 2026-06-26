@@ -14,4 +14,8 @@ Write-Host "==> hardhat compile"
 npm run compile --silent
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+Write-Host "==> hardhat test"
+npm run test --silent
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
 Write-Host "ALL CHECKS PASSED"

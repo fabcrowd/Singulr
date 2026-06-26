@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from singulr.bot.handlers import run_watcher_job
 from singulr.models import Ban, Profile, StylometryProfile
 from singulr.services.stylometry import extract_features, merge_feature_vectors
 from singulr.services.watcher import find_watcher_matches
@@ -182,3 +185,41 @@ async def test_find_watcher_matches_ignores_overturned_bans(db_session: AsyncSes
     matches = await find_watcher_matches(db_session)
 
     assert matches == []
+
+
+@pytest.mark.asyncio
+async def test_run_watcher_job_posts_matches_to_log_channel(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Periodic watcher job posts stylometry hits to the admin log channel."""
+    log_to_channel = AsyncMock()
+    monkeypatch.setattr("singulr.bot.handlers.log_to_channel", log_to_channel)
+    monkeypatch.setattr(
+        "singulr.bot.handlers.find_watcher_matches",
+        AsyncMock(
+            return_value=[
+                {
+                    "user_id": 5000,
+                    "reason": "stylometry_match",
+                    "score": 0.95,
+                    "ban_fingerprint": "0x" + "aa" * 32,
+                }
+            ]
+        ),
+    )
+
+    context = MagicMock()
+    context.application = MagicMock()
+
+    with patch("singulr.bot.handlers.SessionLocal") as session_local:
+        session = AsyncMock()
+        session_local.return_value.__aenter__ = AsyncMock(return_value=session)
+        session_local.return_value.__aexit__ = AsyncMock(return_value=False)
+        await run_watcher_job(context)
+
+    log_to_channel.assert_awaited_once()
+    call = log_to_channel.await_args
+    assert call.args[1] == "WATCHER_MATCH"
+    assert call.kwargs["user_id"] == 5000
+    assert call.kwargs["reason"] == "stylometry_match"
+    assert call.kwargs["match_score"] == 0.95
