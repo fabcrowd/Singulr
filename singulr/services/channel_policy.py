@@ -158,6 +158,8 @@ async def upsert_channel_security_settings(
     instant_ban_categories: list[str] | None = None,
     social_profiling_enabled: bool | None = None,
     social_external_api_enabled: bool | None = None,
+    automation_flag_mode: str | None = None,
+    ai_pending_score_threshold: int | None = None,
 ) -> ChannelSecuritySettings:
     """Create or update channel policy from wizard answers."""
     resolved = resolve_wizard_thresholds(preset, evasion_mode)
@@ -191,9 +193,18 @@ async def upsert_channel_security_settings(
         row.social_pending_score_threshold = get_settings().default_social_pending_score_threshold
     if row.social_external_api_enabled is None:
         row.social_external_api_enabled = False
+    settings = get_settings()
+    if automation_flag_mode is not None:
+        row.automation_flag_mode = automation_flag_mode
+    elif row.automation_flag_mode is None:
+        row.automation_flag_mode = settings.default_automation_flag_mode
+    if ai_pending_score_threshold is not None:
+        row.ai_pending_score_threshold = ai_pending_score_threshold
+    elif row.ai_pending_score_threshold is None:
+        row.ai_pending_score_threshold = settings.default_ai_pending_score_threshold
     row.admin_ops_chat_id = admin_ops_chat_id
     row.wizard_completed_at = datetime.now(UTC)
-    row.wizard_version = 3
+    row.wizard_version = 4
     await session.commit()
     await session.refresh(row)
     return row
@@ -207,6 +218,12 @@ def format_policy_summary(row: ChannelSecuritySettings) -> str:
     share = "yes" if row.share_bans_to_network else "no"
     social = "on" if row.social_profiling_enabled else "off"
     external = "on" if row.social_external_api_enabled else "off"
+    automation = row.automation_flag_mode or get_settings().default_automation_flag_mode
+    ai_threshold = (
+        row.ai_pending_score_threshold
+        if row.ai_pending_score_threshold is not None
+        else get_settings().default_ai_pending_score_threshold
+    )
     return (
         f"Preset: {row.security_preset}\n"
         f"Auto-deny threshold: {row.ban_evasion_auto_deny_threshold:.2f}\n"
@@ -216,5 +233,6 @@ def format_policy_summary(row: ChannelSecuritySettings) -> str:
         f"Network auto-reject: {categories}\n"
         f"Instant-ban categories: {instant}\n"
         f"Social profiling: {social} (external API: {external}, fail mode: {row.social_api_fail_mode})\n"
+        f"Automation handling: {automation} (score threshold: {ai_threshold})\n"
         f"Ops chat: {ops}"
     )

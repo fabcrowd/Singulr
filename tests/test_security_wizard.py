@@ -20,7 +20,10 @@ from singulr.bot.security_wizard import (
     WIZARD_PRESET_KEY,
     WIZARD_SOCIAL_EXTERNAL_KEY,
     WIZARD_SOCIAL_PROFILING_KEY,
+    WIZARD_AUTOMATION_MODE_KEY,
+    WIZARD_AI_THRESHOLD_KEY,
     WizardState,
+    automation_selected,
     confirm_selected,
     delta_selected,
     evasion_selected,
@@ -144,12 +147,17 @@ async def test_wizard_state_transitions_to_confirm() -> None:
 
     soc_update = _callback_update("sec_soc_done")
     state = await social_selected(soc_update, context)
+    assert state == WizardState.AUTOMATION
+
+    auto_update = _callback_update("sec_auto_pending")
+    state = await automation_selected(auto_update, context)
     assert state == WizardState.CONFIRM
-    soc_update.callback_query.edit_message_text.assert_awaited()
-    summary = soc_update.callback_query.edit_message_text.await_args.args[0]
+    auto_update.callback_query.edit_message_text.assert_awaited()
+    summary = auto_update.callback_query.edit_message_text.await_args.args[0]
     assert "read_write" in summary
     assert "scam_fraud" in summary
     assert "Social profiling" in summary
+    assert "Automation handling: pending" in summary
 
 
 @pytest.mark.asyncio
@@ -167,7 +175,7 @@ async def test_upsert_persists_wizard_completed_at(db_session: AsyncSession) -> 
 
     assert row.security_preset == "strict"
     assert row.wizard_completed_at is not None
-    assert row.wizard_version == 3
+    assert row.wizard_version == 4
     assert row.network_registry_mode == "read_write"
     assert row.share_bans_to_network is True
     assert row.network_auto_reject_categories == ["scam_fraud", "raid_coordination"]
@@ -216,6 +224,8 @@ async def test_confirm_persists_settings(db_session: AsyncSession, monkeypatch: 
         WIZARD_INSTANT_BAN_KEY: {"impersonation", "bot_abuse"},
         WIZARD_SOCIAL_PROFILING_KEY: True,
         WIZARD_SOCIAL_EXTERNAL_KEY: False,
+        WIZARD_AUTOMATION_MODE_KEY: "flag",
+        WIZARD_AI_THRESHOLD_KEY: 50,
     }
     update = _callback_update("sec_confirm_yes")
 
@@ -231,7 +241,7 @@ async def test_confirm_persists_settings(db_session: AsyncSession, monkeypatch: 
     assert row is not None
     assert row.security_preset == "balanced"
     assert row.wizard_completed_at is not None
-    assert row.wizard_version == 3
+    assert row.wizard_version == 4
     assert row.network_registry_mode == "read"
     assert set(row.network_auto_reject_categories or []) == {"harassment", "scam_fraud"}
 
@@ -254,6 +264,8 @@ async def test_confirm_rejects_non_admin(db_session: AsyncSession, monkeypatch: 
         WIZARD_INSTANT_BAN_KEY: set(),
         WIZARD_SOCIAL_PROFILING_KEY: True,
         WIZARD_SOCIAL_EXTERNAL_KEY: False,
+        WIZARD_AUTOMATION_MODE_KEY: "flag",
+        WIZARD_AI_THRESHOLD_KEY: 50,
     }
     update = _callback_update("sec_confirm_yes")
     update.callback_query.message = MagicMock()
@@ -322,7 +334,7 @@ async def test_delta_prompt_when_wizard_version_one(
 
     assert state == WizardState.DELTA
     text = update.message.reply_text.await_args.args[0]
-    assert "social" in text.lower()
+    assert "automation" in text.lower()
 
 
 @pytest.mark.asyncio
@@ -353,3 +365,33 @@ async def test_delta_new_skips_to_instant_ban(db_session: AsyncSession) -> None:
 
     assert state == WizardState.INSTANT_BAN
     assert context.user_data[WIZARD_PRESET_KEY] == "open"
+
+
+@pytest.mark.asyncio
+async def test_delta_v3_jumps_to_automation_step(db_session: AsyncSession) -> None:
+    """Wizard v3 admins answer only the new automation question."""
+    from datetime import UTC, datetime
+
+    row = ChannelSecuritySettings(
+        channel_id=88012,
+        security_preset="balanced",
+        ban_evasion_auto_deny_threshold=0.92,
+        local_similarity_flag_threshold=0.85,
+        network_registry_mode="read",
+        wizard_completed_at=datetime.now(UTC),
+        wizard_version=3,
+    )
+    db_session.add(row)
+    await db_session.commit()
+
+    context = MagicMock()
+    context.user_data = {WIZARD_CHANNEL_KEY: 88012}
+    update = _callback_update("sec_delta_new")
+
+    with patch("singulr.bot.security_wizard.SessionLocal") as session_local:
+        session_local.return_value.__aenter__ = AsyncMock(return_value=db_session)
+        session_local.return_value.__aexit__ = AsyncMock(return_value=False)
+        state = await delta_selected(update, context)
+
+    assert state == WizardState.AUTOMATION
+    assert context.user_data[WIZARD_PRESET_KEY] == "balanced"

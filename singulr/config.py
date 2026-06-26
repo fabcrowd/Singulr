@@ -62,6 +62,8 @@ class Settings(BaseSettings):
     log_json: bool = False
     verify_rate_limit_per_minute: int = 30
     verify_precheck_per_token_per_minute: int = 10
+    join_burst_window_seconds: int = 300
+    join_burst_threshold: int = 10
     trusted_proxy_ips: str = ""
 
     @property

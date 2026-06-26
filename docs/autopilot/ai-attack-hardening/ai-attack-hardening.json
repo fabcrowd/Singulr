@@ -103,7 +103,7 @@
         "tests/test_security_wizard.py covers new step",
         "verify.ps1 green"
       ],
-      "passes": false
+      "passes": true
     },
     {
       "id": "8",
@@ -116,7 +116,7 @@
         "tests/test_join_velocity.py covers burst detection",
         "pytest passes"
       ],
-      "passes": false
+      "passes": true
     },
     {
       "id": "9",

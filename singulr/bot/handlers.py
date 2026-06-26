@@ -37,6 +37,7 @@ from singulr.services.telegram_actions import (
     send_verification_dm,
 )
 from singulr.services.channel_policy import get_effective_channel_policy
+from singulr.services.join_velocity import record_join_request
 from singulr.services.reverification import require_reverification
 from singulr.services.social_profile import SocialProfileContext, analyze_social_profile
 from singulr.services.tokens import TokenRateLimitError, create_token
@@ -138,6 +139,8 @@ async def on_join_request(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
     title = await get_channel_title(context.application, channel_id)
     display_name = " ".join(part for part in (user.first_name, user.last_name) if part)
+
+    record_join_request(channel_id)
 
     try:
         async with SessionLocal() as session:

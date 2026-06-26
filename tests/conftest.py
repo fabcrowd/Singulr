@@ -13,14 +13,17 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from singulr.db import Base, get_session
 from singulr import models  # noqa: F401
 from singulr.services.rate_limit import reset_verify_limiter
+from singulr.services.join_velocity import reset_join_velocity_tracker
 
 
 @pytest.fixture(autouse=True)
 def _clear_verify_rate_limiters() -> None:
     """Isolate verify rate limiter state between tests."""
     reset_verify_limiter()
+    reset_join_velocity_tracker()
     yield
     reset_verify_limiter()
+    reset_join_velocity_tracker()
 
 
 @pytest_asyncio.fixture

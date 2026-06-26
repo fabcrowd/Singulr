@@ -37,10 +37,12 @@ WIZARD_NET_CATEGORIES_KEY = "security_wizard_net_categories"
 WIZARD_INSTANT_BAN_KEY = "security_wizard_instant_ban"
 WIZARD_SOCIAL_PROFILING_KEY = "security_wizard_social_profiling"
 WIZARD_SOCIAL_EXTERNAL_KEY = "security_wizard_social_external"
+WIZARD_AUTOMATION_MODE_KEY = "security_wizard_automation_mode"
+WIZARD_AI_THRESHOLD_KEY = "security_wizard_ai_threshold"
 WIZARD_DELTA_ONLY_KEY = "security_wizard_delta_only"
 
-CURRENT_WIZARD_VERSION = 3
-WIZARD_TOTAL_QUESTIONS = 7
+CURRENT_WIZARD_VERSION = 4
+WIZARD_TOTAL_QUESTIONS = 8
 
 
 class WizardState(IntEnum):
@@ -54,7 +56,8 @@ class WizardState(IntEnum):
     NETWORK_CATEGORIES = 5
     INSTANT_BAN = 6
     SOCIAL = 7
-    CONFIRM = 8
+    AUTOMATION = 8
+    CONFIRM = 9
 
 
 async def is_channel_admin(update: Update, channel_id: int) -> bool:
@@ -179,6 +182,17 @@ def _social_keyboard(*, profiling: bool, external: bool) -> InlineKeyboardMarkup
     )
 
 
+def _automation_keyboard() -> InlineKeyboardMarkup:
+    """Automation signal handling strictness."""
+    return InlineKeyboardMarkup(
+        [
+            [InlineKeyboardButton("A — Flag only", callback_data="sec_auto_flag")],
+            [InlineKeyboardButton("B — Pending review", callback_data="sec_auto_pending")],
+            [InlineKeyboardButton("C — Auto-block", callback_data="sec_auto_block")],
+        ]
+    )
+
+
 def _categories_keyboard(selected: set[str]) -> InlineKeyboardMarkup:
     """Multi-select ban categories for network auto-reject."""
     rows: list[list[InlineKeyboardButton]] = []
@@ -227,6 +241,8 @@ def _wizard_user_data_keys() -> tuple[str, ...]:
         WIZARD_INSTANT_BAN_KEY,
         WIZARD_SOCIAL_PROFILING_KEY,
         WIZARD_SOCIAL_EXTERNAL_KEY,
+        WIZARD_AUTOMATION_MODE_KEY,
+        WIZARD_AI_THRESHOLD_KEY,
         WIZARD_DELTA_ONLY_KEY,
     )
 
@@ -251,6 +267,15 @@ def _preview_settings(context: ContextTypes.DEFAULT_TYPE) -> ChannelSecuritySett
     )
     social_profiling = bool(context.user_data.get(WIZARD_SOCIAL_PROFILING_KEY, True))
     social_external = bool(context.user_data.get(WIZARD_SOCIAL_EXTERNAL_KEY, False))
+    automation_mode = str(
+        context.user_data.get(WIZARD_AUTOMATION_MODE_KEY, get_settings().default_automation_flag_mode)
+    )
+    ai_threshold = int(
+        context.user_data.get(
+            WIZARD_AI_THRESHOLD_KEY,
+            get_settings().default_ai_pending_score_threshold,
+        )
+    )
     resolved = resolve_wizard_thresholds(preset, evasion)
     return ChannelSecuritySettings(
         channel_id=channel_id,
@@ -263,6 +288,8 @@ def _preview_settings(context: ContextTypes.DEFAULT_TYPE) -> ChannelSecuritySett
         instant_ban_categories=instant,
         social_profiling_enabled=social_profiling,
         social_external_api_enabled=social_external,
+        automation_flag_mode=automation_mode,
+        ai_pending_score_threshold=ai_threshold,
         admin_ops_chat_id=ops_chat_id,
     )
 
@@ -308,7 +335,7 @@ async def security_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         and existing.wizard_version < CURRENT_WIZARD_VERSION
     ):
         await update.message.reply_text(
-            "New social profiling settings are available.\n"
+            "New automation strictness settings are available.\n"
             "Answer only the new questions, or review everything from scratch:",
             reply_markup=_delta_keyboard(),
         )
@@ -360,6 +387,23 @@ async def delta_selected(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     )
     context.user_data[WIZARD_SOCIAL_PROFILING_KEY] = bool(existing.social_profiling_enabled)
     context.user_data[WIZARD_SOCIAL_EXTERNAL_KEY] = bool(existing.social_external_api_enabled)
+    context.user_data[WIZARD_AUTOMATION_MODE_KEY] = (
+        existing.automation_flag_mode or get_settings().default_automation_flag_mode
+    )
+    context.user_data[WIZARD_AI_THRESHOLD_KEY] = (
+        existing.ai_pending_score_threshold
+        if existing.ai_pending_score_threshold is not None
+        else get_settings().default_ai_pending_score_threshold
+    )
+
+    if existing.wizard_version >= 3:
+        await query.edit_message_text(
+            f"Security setup (question 8 of {WIZARD_TOTAL_QUESTIONS})\n"
+            "How should automation signals (webdriver, synthetic typing) be handled?",
+            reply_markup=_automation_keyboard(),
+        )
+        return WizardState.AUTOMATION
+
     await query.edit_message_text(
         f"Security setup (question 6 of {WIZARD_TOTAL_QUESTIONS})\n"
         "Tap categories for instant ban on verify (toggle on/off), then Done:",
@@ -589,6 +633,30 @@ async def social_selected(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         )
         return WizardState.SOCIAL
 
+    await query.edit_message_text(
+        f"Security setup (question 8 of {WIZARD_TOTAL_QUESTIONS})\n"
+        "How should automation signals (webdriver, synthetic typing) be handled?",
+        reply_markup=_automation_keyboard(),
+    )
+    return WizardState.AUTOMATION
+
+
+async def automation_selected(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Handle automation strictness selection and show confirmation."""
+    query = update.callback_query
+    if not query or not query.data:
+        return ConversationHandler.END
+    await query.answer()
+    if not await _guard_wizard_admin(update, context):
+        return ConversationHandler.END
+
+    mode = query.data.removeprefix("sec_auto_")
+    context.user_data[WIZARD_AUTOMATION_MODE_KEY] = mode
+    context.user_data.setdefault(
+        WIZARD_AI_THRESHOLD_KEY,
+        get_settings().default_ai_pending_score_threshold,
+    )
+
     preview = _preview_settings(context)
     summary = format_policy_summary(preview)
     channel_id = int(context.user_data[WIZARD_CHANNEL_KEY])
@@ -626,6 +694,15 @@ async def confirm_selected(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     instant = sorted(context.user_data.get(WIZARD_INSTANT_BAN_KEY, set()))
     social_profiling = bool(context.user_data.get(WIZARD_SOCIAL_PROFILING_KEY, True))
     social_external = bool(context.user_data.get(WIZARD_SOCIAL_EXTERNAL_KEY, False))
+    automation_mode = str(
+        context.user_data.get(WIZARD_AUTOMATION_MODE_KEY, get_settings().default_automation_flag_mode)
+    )
+    ai_threshold = int(
+        context.user_data.get(
+            WIZARD_AI_THRESHOLD_KEY,
+            get_settings().default_ai_pending_score_threshold,
+        )
+    )
 
     async with SessionLocal() as session:
         row = await upsert_channel_security_settings(
@@ -639,6 +716,8 @@ async def confirm_selected(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             instant_ban_categories=instant,
             social_profiling_enabled=social_profiling,
             social_external_api_enabled=social_external,
+            automation_flag_mode=automation_mode,
+            ai_pending_score_threshold=ai_threshold,
         )
         row.wizard_version = CURRENT_WIZARD_VERSION
         await session.commit()
@@ -684,6 +763,9 @@ def build_security_wizard_handler() -> ConversationHandler:
             ],
             WizardState.SOCIAL: [
                 CallbackQueryHandler(social_selected, pattern=r"^sec_soc_"),
+            ],
+            WizardState.AUTOMATION: [
+                CallbackQueryHandler(automation_selected, pattern=r"^sec_auto_"),
             ],
             WizardState.CONFIRM: [
                 CallbackQueryHandler(confirm_selected, pattern=r"^sec_confirm_"),
