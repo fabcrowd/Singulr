@@ -19,6 +19,7 @@ from singulr.services.channel_policy import (
     EffectivePolicy,
     get_effective_channel_policy,
 )
+from singulr.services.join_velocity import join_burst_risk_factor, peek_join_velocity
 from singulr.services.keystroke import keystroke_similarity
 from singulr.services.keystroke_validation import keystroke_risk_factors_from_profile
 from singulr.services.network_reputation import (
@@ -170,6 +171,11 @@ async def check_known_bad(
         session, channel_id=channel_id, policy=policy
     )
     factors: list[str] = []
+
+    if channel_id is not None:
+        burst_factor = join_burst_risk_factor(peek_join_velocity(channel_id))
+        if burst_factor:
+            factors.append(burst_factor)
 
     ban_by_user = await session.scalar(
         select(Ban).where(

@@ -61,6 +61,30 @@ async def test_log_to_ops_channel_uses_env_admin_ops_chat_id(monkeypatch: pytest
 
 
 @pytest.mark.asyncio
+async def test_log_to_ops_channel_includes_join_burst_context(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ops alerts include join burst context when burst risk factor is present."""
+    monkeypatch.setenv("ADMIN_OPS_CHAT_ID", "-100888777")
+    monkeypatch.setenv("JOIN_BURST_THRESHOLD", "10")
+    monkeypatch.setenv("JOIN_BURST_WINDOW_SECONDS", "300")
+    get_settings.cache_clear()
+    app = _mock_app()
+
+    await log_to_ops_channel(
+        app,
+        "PENDING_REVIEW",
+        channel_id=42,
+        user_id=501,
+        reason="Elevated risk — review recommended",
+        risk_factors=["join_burst:12"],
+    )
+
+    message = app.bot.send_message.await_args.kwargs["text"]
+    assert "Join burst: 12 joins in 300s window (threshold 10)" in message
+
+
+@pytest.mark.asyncio
 async def test_pending_verification_does_not_ban_until_deny(monkeypatch: pytest.MonkeyPatch) -> None:
     """Pending path holds user and posts Permit/Deny without banning."""
     monkeypatch.setenv("ADMIN_OPS_CHAT_ID", "-100888777")

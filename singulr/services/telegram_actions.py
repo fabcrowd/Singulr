@@ -121,6 +121,23 @@ def truncate_fingerprint_hash(fingerprint_hash: str) -> str:
     return f"{fingerprint_hash[:FINGERPRINT_DISPLAY_LEN]}..."
 
 
+def _join_burst_context(risk_factors: list[str]) -> str | None:
+    """Human-readable join burst line when burst risk is present."""
+    for factor in risk_factors:
+        if not factor.startswith("join_burst:"):
+            continue
+        try:
+            count = int(factor.split(":", 1)[1])
+        except ValueError:
+            continue
+        settings = get_settings()
+        return (
+            f"Join burst: {count} joins in {settings.join_burst_window_seconds}s window "
+            f"(threshold {settings.join_burst_threshold})"
+        )
+    return None
+
+
 def _risk_score_from_factors(risk_factors: list[str]) -> float | None:
     """Extract the highest similarity score encoded in risk factor labels."""
     scores: list[float] = []
@@ -151,6 +168,9 @@ def format_elevated_risk_body(
     ]
     if factors:
         lines.append(f"Risk factors: {', '.join(factors)}")
+    burst_context = _join_burst_context(factors)
+    if burst_context:
+        lines.append(burst_context)
     risk_score = _risk_score_from_factors(factors)
     if risk_score is not None:
         lines.append(f"Risk score: {risk_score:.0%}")

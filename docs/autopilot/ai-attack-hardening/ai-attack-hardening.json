@@ -129,7 +129,7 @@
         "tests cover burst factor in check_known_bad",
         "verify.ps1 green"
       ],
-      "passes": false
+      "passes": true
     },
     {
       "id": "10",

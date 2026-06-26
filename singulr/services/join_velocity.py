@@ -50,6 +50,22 @@ class JoinVelocityTracker:
                 bucket.popleft()
             bucket.append(now)
             count = len(bucket)
+        return self._snapshot(channel_id, count)
+
+    def peek(self, channel_id: int) -> JoinVelocitySnapshot:
+        """Return current join velocity without recording a new event."""
+        now = time.monotonic()
+        cutoff = now - self._window_seconds
+        with self._lock:
+            bucket = self._events.get(channel_id)
+            if not bucket:
+                count = 0
+            else:
+                count = sum(1 for event_at in bucket if event_at > cutoff)
+        return self._snapshot(channel_id, count)
+
+    def _snapshot(self, channel_id: int, count: int) -> JoinVelocitySnapshot:
+        """Build a snapshot for the given join count."""
         return JoinVelocitySnapshot(
             channel_id=channel_id,
             join_count=count,
@@ -85,6 +101,18 @@ def _get_tracker() -> JoinVelocityTracker:
 def record_join_request(channel_id: int) -> JoinVelocitySnapshot:
     """Record a channel join request and return the current velocity snapshot."""
     return _get_tracker().record_join(channel_id)
+
+
+def peek_join_velocity(channel_id: int) -> JoinVelocitySnapshot:
+    """Return join velocity for a channel without recording a new join."""
+    return _get_tracker().peek(channel_id)
+
+
+def join_burst_risk_factor(snapshot: JoinVelocitySnapshot) -> str | None:
+    """Risk factor label when the channel is in a join burst."""
+    if not snapshot.is_burst:
+        return None
+    return f"join_burst:{snapshot.join_count}"
 
 
 def reset_join_velocity_tracker() -> None:

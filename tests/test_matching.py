@@ -9,7 +9,9 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from singulr.models import Ban, IPSession, Profile
+from singulr.config import get_settings
 from singulr.services.channel_policy import EffectivePolicy
+from singulr.services.join_velocity import record_join_request, reset_join_velocity_tracker
 from singulr.services.keystroke import build_keystroke_profile, keystroke_similarity
 from singulr.services.matching import Decision, check_known_bad
 
@@ -130,6 +132,33 @@ async def test_approves_clean_user(db_session: AsyncSession) -> None:
     assert result.decision == Decision.APPROVE
     assert result.reason == "Clean"
     assert result.risk_factors == []
+
+
+@pytest.mark.asyncio
+async def test_join_burst_adds_risk_factor_at_verify(
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """High join velocity during a burst adds a join_burst risk factor."""
+    monkeypatch.setenv("JOIN_BURST_THRESHOLD", "2")
+    get_settings.cache_clear()
+    reset_join_velocity_tracker()
+    channel_id = -100200
+    record_join_request(channel_id)
+    record_join_request(channel_id)
+
+    result = await check_known_bad(
+        db_session,
+        _chain_mock(),
+        telegram_user_id=333,
+        fingerprint_hash="0x" + "d" * 64,
+        ip_hash=None,
+        channel_id=channel_id,
+        policy=_DEFAULT_POLICY,
+    )
+
+    assert "join_burst:2" in result.risk_factors
+    assert result.decision == Decision.FLAG
 
 
 @pytest.mark.asyncio
