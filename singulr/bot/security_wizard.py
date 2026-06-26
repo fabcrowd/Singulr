@@ -60,7 +60,9 @@ class WizardState(IntEnum):
 async def is_channel_admin(update: Update, channel_id: int) -> bool:
     """Return True when the user is an administrator of the target channel."""
     user = update.effective_user
-    if not user or not update.effective_chat:
+    if not user and update.callback_query:
+        user = update.callback_query.from_user
+    if not user:
         return False
     try:
         member = await update.get_bot().get_chat_member(channel_id, user.id)
@@ -68,6 +70,19 @@ async def is_channel_admin(update: Update, channel_id: int) -> bool:
         logger.warning("get_chat_member failed for %s: %s", channel_id, exc)
         return False
     return member.status in {"administrator", "creator"}
+
+
+async def _guard_wizard_admin(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
+    """Return False when callback sender is not a channel admin (ends wizard)."""
+    raw_channel = context.user_data.get(WIZARD_CHANNEL_KEY)
+    if raw_channel is None:
+        return False
+    if await is_channel_admin(update, int(raw_channel)):
+        return True
+    query = update.callback_query
+    if query and query.message:
+        await query.message.reply_text("Only channel administrators can configure security.")
+    return False
 
 
 def _preset_keyboard() -> InlineKeyboardMarkup:
@@ -312,6 +327,8 @@ async def delta_selected(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     if not query or not query.data:
         return ConversationHandler.END
     await query.answer()
+    if not await _guard_wizard_admin(update, context):
+        return ConversationHandler.END
 
     channel_id = int(context.user_data[WIZARD_CHANNEL_KEY])
     if query.data == "sec_delta_full":
@@ -372,6 +389,8 @@ async def preset_selected(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     if not query or not query.data:
         return ConversationHandler.END
     await query.answer()
+    if not await _guard_wizard_admin(update, context):
+        return ConversationHandler.END
     preset = query.data.removeprefix("sec_preset_")
     context.user_data[WIZARD_PRESET_KEY] = preset
     await query.edit_message_text(
@@ -387,6 +406,8 @@ async def evasion_selected(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     if not query or not query.data:
         return ConversationHandler.END
     await query.answer()
+    if not await _guard_wizard_admin(update, context):
+        return ConversationHandler.END
     evasion = query.data.removeprefix("sec_evasion_")
     context.user_data[WIZARD_EVASION_KEY] = evasion
     await query.edit_message_text(
@@ -402,6 +423,8 @@ async def ops_selected(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     if not query or not query.data:
         return ConversationHandler.END
     await query.answer()
+    if not await _guard_wizard_admin(update, context):
+        return ConversationHandler.END
     settings = get_settings()
     if query.data == "sec_ops_default":
         ops_chat_id = settings.admin_ops_chat_id or settings.log_channel_id or None
@@ -422,6 +445,8 @@ async def network_mode_selected(update: Update, context: ContextTypes.DEFAULT_TY
     if not query or not query.data:
         return ConversationHandler.END
     await query.answer()
+    if not await _guard_wizard_admin(update, context):
+        return ConversationHandler.END
     mode = query.data.removeprefix("sec_net_")
     context.user_data[WIZARD_NETWORK_MODE_KEY] = mode
     context.user_data[WIZARD_NET_CATEGORIES_KEY] = set(DEFAULT_NETWORK_AUTO_REJECT)
@@ -441,6 +466,8 @@ async def network_categories_selected(
     if not query or not query.data:
         return ConversationHandler.END
     await query.answer()
+    if not await _guard_wizard_admin(update, context):
+        return ConversationHandler.END
 
     selected: set[str] = set(context.user_data.get(WIZARD_NET_CATEGORIES_KEY, set()))
 
@@ -486,6 +513,8 @@ async def instant_ban_selected(update: Update, context: ContextTypes.DEFAULT_TYP
     if not query or not query.data:
         return ConversationHandler.END
     await query.answer()
+    if not await _guard_wizard_admin(update, context):
+        return ConversationHandler.END
 
     selected: set[str] = set(context.user_data.get(WIZARD_INSTANT_BAN_KEY, set()))
 
@@ -534,6 +563,8 @@ async def social_selected(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     if not query or not query.data:
         return ConversationHandler.END
     await query.answer()
+    if not await _guard_wizard_admin(update, context):
+        return ConversationHandler.END
 
     profiling = bool(context.user_data.get(WIZARD_SOCIAL_PROFILING_KEY, True))
     external = bool(context.user_data.get(WIZARD_SOCIAL_EXTERNAL_KEY, False))
@@ -574,6 +605,8 @@ async def confirm_selected(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     if not query or not query.data:
         return ConversationHandler.END
     await query.answer()
+    if not await _guard_wizard_admin(update, context):
+        return ConversationHandler.END
     if query.data == "sec_confirm_restart":
         channel_id = int(context.user_data[WIZARD_CHANNEL_KEY])
         _clear_wizard_user_data(context)

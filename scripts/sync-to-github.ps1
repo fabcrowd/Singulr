@@ -13,7 +13,8 @@
   .\scripts\sync-to-github.ps1
 #>
 param(
-    [switch]$DryRun
+    [switch]$DryRun,
+    [string]$TargetBranch = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -76,13 +77,14 @@ $stamp = Get-Date -Format "yyyy-MM-dd HH:mm"
 $message = "chore: sync local work $stamp"
 git commit -m $message | ForEach-Object { Write-SyncLog $_ }
 
-Write-SyncLog "PUSH: origin $branch"
-git push origin "HEAD:$branch" 2>&1 | ForEach-Object { Write-SyncLog $_ }
+$pushBranch = if ($TargetBranch) { $TargetBranch } else { $branch }
+Write-SyncLog "PUSH: origin HEAD -> $pushBranch (local branch: $branch)"
+git push origin "HEAD:$pushBranch" 2>&1 | ForEach-Object { Write-SyncLog $_ }
 
 if ($LASTEXITCODE -ne 0) {
     Write-SyncLog "ERROR: push failed (exit $LASTEXITCODE)"
     exit $LASTEXITCODE
 }
 
-Write-SyncLog "OK: synced $($staged.Count) path(s) to origin/$branch"
+Write-SyncLog "OK: synced $($staged.Count) path(s) to origin/$pushBranch"
 exit 0

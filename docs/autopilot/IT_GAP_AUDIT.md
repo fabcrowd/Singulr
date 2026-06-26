@@ -24,7 +24,7 @@
 
 | ID | Risk | Location | Action |
 |----|------|----------|--------|
-| P0-1 | **High** | `security_wizard.py` callbacks | Re-check `is_channel_admin()` on **every** wizard step, especially `confirm_selected` before `upsert_channel_security_settings` |
+| P0-1 | **High** | `security_wizard.py` callbacks | Re-check `is_channel_admin()` on **every** wizard step, especially `confirm_selected` before `upsert_channel_security_settings` | **DONE** (2026-06-26 tick 21) |
 | P0-2 | **High** | `api/verify.py` precheck | Per-token rate limit; reduce oracle (`allowed`/`ip_flagged` brute-force on leaked links) |
 | P0-3 | **High** | `api/verify.py` `_client_ip` | Only trust `X-Forwarded-For` from configured proxy IPs |
 | P0-4 | **Critical** | `POST /api/admin/unban` | HTTP tests: 200, 400, 404, 401; wire if missing coverage |

@@ -132,3 +132,8 @@
 2026-06-26T06:06:14.3048178-04:00 [master a238a39] chore: sync local work 2026-06-26 06:06
 2026-06-26T06:06:14.3058184-04:00  1 file changed, 4 insertions(+)
 2026-06-26T06:06:14.3068220-04:00 PUSH: origin master
+2026-06-26T07:06:14.2939974-04:00 WARN: unstaged secret file(s): .env.example
+2026-06-26T07:06:14.4514612-04:00 [master 89a17f9] chore: sync local work 2026-06-26 07:06
+2026-06-26T07:06:14.4524646-04:00  2 files changed, 116 insertions(+)
+2026-06-26T07:06:14.4534684-04:00  create mode 100644 docs/autopilot/IT_GAP_AUDIT.md
+2026-06-26T07:06:14.4544714-04:00 PUSH: origin master

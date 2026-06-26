@@ -37,6 +37,15 @@ from singulr.models import ChannelSecuritySettings
 from singulr.services.channel_policy import resolve_wizard_thresholds, upsert_channel_security_settings
 
 
+@pytest.fixture(autouse=True)
+def _wizard_channel_admin(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Callback handlers require channel admin unless a test overrides this."""
+    monkeypatch.setattr(
+        "singulr.bot.security_wizard.is_channel_admin",
+        AsyncMock(return_value=True),
+    )
+
+
 def _private_update(*, user_id: int = 4242) -> MagicMock:
     """Build a private-chat update with a mock message."""
     update = MagicMock()
@@ -225,6 +234,42 @@ async def test_confirm_persists_settings(db_session: AsyncSession, monkeypatch: 
     assert row.wizard_version == 3
     assert row.network_registry_mode == "read"
     assert set(row.network_auto_reject_categories or []) == {"harassment", "scam_fraud"}
+
+
+@pytest.mark.asyncio
+async def test_confirm_rejects_non_admin(db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Non-admin cannot persist security settings via confirm callback."""
+    monkeypatch.setattr(
+        "singulr.bot.security_wizard.is_channel_admin",
+        AsyncMock(return_value=False),
+    )
+    context = MagicMock()
+    context.user_data = {
+        WIZARD_CHANNEL_KEY: 88004,
+        WIZARD_PRESET_KEY: "balanced",
+        WIZARD_EVASION_KEY: "high_only",
+        WIZARD_OPS_KEY: None,
+        WIZARD_NETWORK_MODE_KEY: "read",
+        WIZARD_NET_CATEGORIES_KEY: set(),
+        WIZARD_INSTANT_BAN_KEY: set(),
+        WIZARD_SOCIAL_PROFILING_KEY: True,
+        WIZARD_SOCIAL_EXTERNAL_KEY: False,
+    }
+    update = _callback_update("sec_confirm_yes")
+    update.callback_query.message = MagicMock()
+    update.callback_query.message.reply_text = AsyncMock()
+
+    with patch("singulr.bot.security_wizard.SessionLocal") as session_local:
+        session_local.return_value.__aenter__ = AsyncMock(return_value=db_session)
+        session_local.return_value.__aexit__ = AsyncMock(return_value=False)
+        result = await confirm_selected(update, context)
+
+    assert result == -1
+    row = await db_session.scalar(
+        select(ChannelSecuritySettings).where(ChannelSecuritySettings.channel_id == 88004)
+    )
+    assert row is None
+    update.callback_query.message.reply_text.assert_awaited_once()
 
 
 @pytest.mark.asyncio
