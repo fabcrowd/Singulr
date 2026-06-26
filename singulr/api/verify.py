@@ -26,6 +26,10 @@ from singulr.services.reverification import STATUS_APPROVED, get_profile, is_rev
 from singulr.services.rate_limit import allow_verify_request
 from singulr.services.tokens import validate_token, claim_verification_token
 from singulr.services.verify_ban import block_ban_taxonomy
+from singulr.services.verify_session import (
+    issue_challenge_secret,
+    verify_challenge_proof,
+)
 
 router = APIRouter(prefix="/api", tags=["verify"])
 _chain = ChainClient()
@@ -60,6 +64,7 @@ class SubmitBody(BaseModel):
     error_count: int = 0
     privacy_accepted: bool = False
     env_flags: EnvFlags | None = None
+    challenge_proof: str = ""
 
 
 def _client_ip(request: Request) -> str:
@@ -200,11 +205,16 @@ async def precheck(
     if result.decision == Decision.BLOCK:
         return {"allowed": False, "reason": "unavailable"}
 
+    challenge_secret = issue_challenge_secret()
+    token_row.verify_challenge_secret = challenge_secret
+    await session.commit()
+
     return {
         "allowed": True,
         "sentence": VERIFICATION_SENTENCE,
         "fingerprint_public_key": get_settings().fingerprint_public_key or None,
         "ip_flagged": "ip_hash_match" in result.risk_factors,
+        "challenge_secret": challenge_secret,
     }
 
 
@@ -221,6 +231,18 @@ async def submit(
 
     if body.typed_text.strip() != VERIFICATION_SENTENCE:
         raise HTTPException(status_code=400, detail="sentence_mismatch")
+
+    token_row = await validate_token(session, body.token)
+    if not token_row:
+        raise HTTPException(status_code=410, detail="link_expired")
+
+    if not verify_challenge_proof(
+        token_row.verify_challenge_secret,
+        body.challenge_proof,
+        token=body.token,
+        visitor_id=body.visitor_id,
+    ):
+        raise HTTPException(status_code=400, detail="challenge_invalid")
 
     token_row = await claim_verification_token(session, body.token)
     if not token_row:

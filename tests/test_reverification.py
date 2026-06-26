@@ -16,6 +16,7 @@ from singulr.models import Profile
 from singulr.services.reverification import STATUS_APPROVED, STATUS_REVERIFICATION_REQUIRED
 from singulr.services.reverification import require_reverification
 from singulr.services.tokens import TokenRateLimitError, create_token
+from verify_helpers import challenge_proof_for
 
 
 def _sample_profile(telegram_user_id: int, *, status: str = STATUS_APPROVED) -> Profile:
@@ -180,6 +181,7 @@ async def test_submit_clears_reverification_on_approve(
     db_session.add(_sample_profile(7300, status=STATUS_REVERIFICATION_REQUIRED))
     await db_session.commit()
     token = await create_token(db_session, telegram_user_id=7300, channel_id=42)
+    proof = await challenge_proof_for(api_client, token, visitor_id="visitor-reverify")
 
     response = await api_client.post(
         "/api/verify/submit",
@@ -190,6 +192,7 @@ async def test_submit_clears_reverification_on_approve(
             "typed_text": VERIFICATION_SENTENCE,
             "keystrokes": [{"key": "a", "down": 0, "up": 80, "flight": 0}],
             "privacy_accepted": True,
+            "challenge_proof": proof,
         },
     )
 
@@ -212,6 +215,9 @@ async def test_submit_forces_pending_until_reverification_completes(
     db_session.add(_sample_profile(7400, status=STATUS_REVERIFICATION_REQUIRED))
     await db_session.commit()
     token = await create_token(db_session, telegram_user_id=7400, channel_id=42)
+    proof = await challenge_proof_for(
+        api_client, token, visitor_id="visitor-reverify-flag"
+    )
 
     response = await api_client.post(
         "/api/verify/submit",
@@ -223,6 +229,7 @@ async def test_submit_forces_pending_until_reverification_completes(
             "keystrokes": [{"key": "a", "down": 0, "up": 80, "flight": 0}],
             "privacy_accepted": True,
             "env_flags": {"webdriver": True, "headless_ua": False},
+            "challenge_proof": proof,
         },
     )
 

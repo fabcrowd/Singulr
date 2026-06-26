@@ -26,7 +26,7 @@
         "tests/test_api_verify.py covers replay rejection",
         "scripts/verify.ps1 green"
       ],
-      "passes": false
+      "passes": true
     },
     {
       "id": "2",

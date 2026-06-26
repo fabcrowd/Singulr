@@ -33,6 +33,7 @@ class VerificationToken(Base):
     social_analyzed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    verify_challenge_secret: Mapped[str | None] = mapped_column(String(128), nullable=True)
 
 
 class Profile(Base):

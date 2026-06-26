@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from singulr.services.rate_limit import reset_verify_limiter
 from singulr.services.tokens import create_token
+from verify_helpers import challenge_proof_for
 
 
 @pytest.fixture(autouse=True)
@@ -50,6 +51,7 @@ async def test_submit_returns_429_when_rate_limited(
     from singulr.config import VERIFICATION_SENTENCE
 
     token = await create_token(db_session, telegram_user_id=8802, channel_id=1)
+    proof = await challenge_proof_for(api_client, token, visitor_id="rate-limit-submit")
     body = {
         "token": token,
         "visitor_id": "rate-limit-submit",
@@ -57,6 +59,7 @@ async def test_submit_returns_429_when_rate_limited(
         "typed_text": VERIFICATION_SENTENCE,
         "keystrokes": [{"key": "W", "down": 0, "up": 80, "flight": 0}],
         "privacy_accepted": True,
+        "challenge_proof": proof,
     }
 
     with patch("singulr.api.verify.get_settings") as mock_settings:

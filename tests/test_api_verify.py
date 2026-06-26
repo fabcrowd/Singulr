@@ -13,6 +13,7 @@ from singulr.models import Ban
 from singulr.services.hashing import hash_fingerprint
 from singulr.services.matching import Decision, MatchResult
 from singulr.services.tokens import create_token
+from verify_helpers import challenge_proof_for
 
 _SAMPLE_KEYSTROKES = [
     {"key": "W", "down": 0, "up": 80, "flight": 0},
@@ -21,21 +22,27 @@ _SAMPLE_KEYSTROKES = [
 ]
 
 
+_VISITOR_ID = "visitor-api-test"
+
+
 def _submit_body(
     token: str,
     *,
+    challenge_proof: str,
     typed_text: str | None = None,
     privacy_accepted: bool = True,
     env_flags: dict | None = None,
+    visitor_id: str = _VISITOR_ID,
 ) -> dict:
     """Build a valid submit payload with optional overrides."""
     body = {
         "token": token,
-        "visitor_id": "visitor-api-test",
+        "visitor_id": visitor_id,
         "device_type": "desktop",
         "typed_text": typed_text if typed_text is not None else VERIFICATION_SENTENCE,
         "keystrokes": _SAMPLE_KEYSTROKES,
         "privacy_accepted": privacy_accepted,
+        "challenge_proof": challenge_proof,
     }
     if env_flags is not None:
         body["env_flags"] = env_flags
@@ -100,6 +107,43 @@ async def test_precheck_blocks_banned_fingerprint_new_account(
 
 
 @pytest.mark.asyncio
+async def test_precheck_returns_challenge_secret(
+    api_client: httpx.AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """Allowed precheck issues a challenge secret for submit binding."""
+    token = await create_token(db_session, telegram_user_id=112, channel_id=42)
+
+    response = await api_client.post(
+        "/api/verify/precheck",
+        json={"token": token, "visitor_id": "visitor-challenge"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["allowed"] is True
+    assert body.get("challenge_secret")
+    assert len(body["challenge_secret"]) >= 32
+
+
+@pytest.mark.asyncio
+async def test_submit_rejects_invalid_challenge(
+    api_client: httpx.AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """Submit without valid challenge proof is rejected."""
+    token = await create_token(db_session, telegram_user_id=224, channel_id=42)
+
+    response = await api_client.post(
+        "/api/verify/submit",
+        json=_submit_body(token, challenge_proof="not-valid"),
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "challenge_invalid"
+
+
+@pytest.mark.asyncio
 @patch("singulr.api.verify._notify_bot", new_callable=AsyncMock)
 async def test_submit_rejects_reused_token(
     _mock_notify: AsyncMock,
@@ -108,16 +152,17 @@ async def test_submit_rejects_reused_token(
 ) -> None:
     """Second submit with the same token returns link_expired (410)."""
     token = await create_token(db_session, telegram_user_id=223, channel_id=42)
+    proof = await challenge_proof_for(api_client, token)
 
     first = await api_client.post(
         "/api/verify/submit",
-        json=_submit_body(token),
+        json=_submit_body(token, challenge_proof=proof),
     )
     assert first.status_code == 200
 
     second = await api_client.post(
         "/api/verify/submit",
-        json=_submit_body(token),
+        json=_submit_body(token, challenge_proof=proof),
     )
     assert second.status_code == 410
     assert second.json()["detail"] == "link_expired"
@@ -133,7 +178,11 @@ async def test_submit_rejects_wrong_sentence(
 
     response = await api_client.post(
         "/api/verify/submit",
-        json=_submit_body(token, typed_text="I am definitely not reading the rules."),
+        json=_submit_body(
+            token,
+            challenge_proof="unused",
+            typed_text="I am definitely not reading the rules.",
+        ),
     )
 
     assert response.status_code == 400
@@ -149,10 +198,11 @@ async def test_submit_approves_clean_user(
 ) -> None:
     """Submit approves a user with no ban signals."""
     token = await create_token(db_session, telegram_user_id=333, channel_id=99)
+    proof = await challenge_proof_for(api_client, token)
 
     response = await api_client.post(
         "/api/verify/submit",
-        json=_submit_body(token),
+        json=_submit_body(token, challenge_proof=proof),
     )
 
     assert response.status_code == 200
@@ -172,11 +222,13 @@ async def test_submit_accepts_env_flags(
 ) -> None:
     """Submit accepts env_flags and approves when signals are clean."""
     token = await create_token(db_session, telegram_user_id=444, channel_id=99)
+    proof = await challenge_proof_for(api_client, token)
 
     response = await api_client.post(
         "/api/verify/submit",
         json=_submit_body(
             token,
+            challenge_proof=proof,
             env_flags={"webdriver": False, "headless_ua": False},
         ),
     )
@@ -196,11 +248,13 @@ async def test_submit_flags_env_anomaly_when_webdriver(
 ) -> None:
     """Submit flags env_anomaly when navigator.webdriver is reported."""
     token = await create_token(db_session, telegram_user_id=555, channel_id=99)
+    proof = await challenge_proof_for(api_client, token)
 
     response = await api_client.post(
         "/api/verify/submit",
         json=_submit_body(
             token,
+            challenge_proof=proof,
             env_flags={"webdriver": True, "headless_ua": False},
         ),
     )
@@ -229,10 +283,13 @@ async def test_submit_returns_pending_with_channel_policy(
         matched_ban_id=5,
     )
     token = await create_token(db_session, telegram_user_id=900, channel_id=42)
+    proof = await challenge_proof_for(
+        api_client, token, session=db_session
+    )
 
     response = await api_client.post(
         "/api/verify/submit",
-        json=_submit_body(token),
+        json=_submit_body(token, challenge_proof=proof),
     )
 
     assert response.status_code == 200
@@ -266,10 +323,13 @@ async def test_submit_block_ban_evasion_auto_deny_not_pending(
         matched_ban_id=3,
     )
     token = await create_token(db_session, telegram_user_id=901, channel_id=42)
+    proof = await challenge_proof_for(
+        api_client, token, session=db_session
+    )
 
     response = await api_client.post(
         "/api/verify/submit",
-        json=_submit_body(token),
+        json=_submit_body(token, challenge_proof=proof),
     )
 
     assert response.status_code == 200
@@ -293,10 +353,11 @@ async def test_submit_approve_registers_fingerprint_on_chain(
 ) -> None:
     """Approve path registers fingerprint when network registry is enabled."""
     token = await create_token(db_session, telegram_user_id=1001, channel_id=42)
+    proof = await challenge_proof_for(api_client, token)
 
     response = await api_client.post(
         "/api/verify/submit",
-        json=_submit_body(token),
+        json=_submit_body(token, challenge_proof=proof),
     )
 
     assert response.status_code == 200

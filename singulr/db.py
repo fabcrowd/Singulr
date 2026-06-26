@@ -57,6 +57,7 @@ async def _apply_schema_patches(conn) -> None:
             "ALTER TABLE tokens ADD COLUMN IF NOT EXISTS join_channel_title VARCHAR(256)",
             "ALTER TABLE tokens ADD COLUMN IF NOT EXISTS social_profile_cache JSONB",
             "ALTER TABLE tokens ADD COLUMN IF NOT EXISTS social_analyzed_at TIMESTAMPTZ",
+            "ALTER TABLE tokens ADD COLUMN IF NOT EXISTS verify_challenge_secret VARCHAR(128)",
         ]
         for statement in statements:
             await conn.execute(text(statement))
@@ -132,3 +133,5 @@ async def _apply_schema_patches(conn) -> None:
         await conn.execute(text("ALTER TABLE tokens ADD COLUMN social_profile_cache JSON"))
     if token_cols and "social_analyzed_at" not in token_cols:
         await conn.execute(text("ALTER TABLE tokens ADD COLUMN social_analyzed_at DATETIME"))
+    if token_cols and "verify_challenge_secret" not in token_cols:
+        await conn.execute(text("ALTER TABLE tokens ADD COLUMN verify_challenge_secret VARCHAR(128)"))

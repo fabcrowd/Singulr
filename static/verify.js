@@ -88,6 +88,46 @@ function fallbackVisitorId() {
 
 
 
+/** HMAC proof binding token + visitor_id to the precheck-issued secret. */
+
+async function computeChallengeProof(secret, verifyToken, visitorId) {
+
+  const enc = new TextEncoder();
+
+  const key = await crypto.subtle.importKey(
+
+    "raw",
+
+    enc.encode(secret),
+
+    { name: "HMAC", hash: "SHA-256" },
+
+    false,
+
+    ["sign"],
+
+  );
+
+  const sig = await crypto.subtle.sign(
+
+    "HMAC",
+
+    key,
+
+    enc.encode(`${verifyToken}:${visitorId}`),
+
+  );
+
+  return Array.from(new Uint8Array(sig))
+
+    .map((b) => b.toString(16).padStart(2, "0"))
+
+    .join("");
+
+}
+
+
+
 async function loadFingerprint() {
 
   const pre = await fetch("/api/verify/precheck", {
@@ -196,7 +236,17 @@ async function loadFingerprint() {
 
 
 
-  return { visitorId, requestId, sentence: finalCheck.sentence };
+  return {
+
+    visitorId,
+
+    requestId,
+
+    sentence: finalCheck.sentence,
+
+    challengeSecret: finalCheck.challenge_secret,
+
+  };
 
 }
 
@@ -358,6 +408,18 @@ async function submit(session) {
 
 
 
+  const challengeProof = await computeChallengeProof(
+
+    session.challengeSecret,
+
+    token,
+
+    session.visitorId,
+
+  );
+
+
+
   const res = await fetch("/api/verify/submit", {
 
     method: "POST",
@@ -385,6 +447,8 @@ async function submit(session) {
       privacy_accepted: true,
 
       env_flags: collectEnvFlags(),
+
+      challenge_proof: challengeProof,
 
     }),
 
