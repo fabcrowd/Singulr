@@ -42,10 +42,10 @@ Failures and patterns the agent must not repeat. Updated automatically on `orche
 - **Fix:** `claim_verification_token()` UPDATE … WHERE used=false at submit entry.
 - **Guard:** `tests/test_hardening.py::test_claim_token_prevents_second_submit`, `tests/test_api_verify.py::test_submit_rejects_reused_token`
 
-### 2026-06-26 — deep-harden — ops callbacks without admin check
-- **Symptom:** Any user tapping Permit/Deny inline buttons could act on pending users.
-- **Root cause:** `on_callback` did not verify channel administrator status.
-- **Fix:** `_require_ops_admin()` before permit, deny, and details handlers.
-- **Guard:** `tests/test_hardening.py::test_permit_callback_rejects_non_admin`
+### 2026-06-26 — deep-harden — legacy approve_/ban_ callbacks
+- **Symptom:** WATCHER_MATCH log-channel Approve/Ban buttons usable by any member.
+- **Root cause:** `on_callback` only gated permit/deny/details, not `approve_` / `ban_*`.
+- **Fix:** `_require_ops_admin()` on approve_, ban_, ban_cat_, ban_sev_ paths.
+- **Guard:** `tests/test_hardening.py::test_approve_callback_rejects_non_admin`
 
 ---
