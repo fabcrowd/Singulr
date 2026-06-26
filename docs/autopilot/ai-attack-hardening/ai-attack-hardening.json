@@ -141,7 +141,7 @@
         "DEPLOY.md documents new env vars and strict preset behavior",
         "scripts/verify.ps1 green"
       ],
-      "passes": false
+      "passes": true
     }
   ]
 }
