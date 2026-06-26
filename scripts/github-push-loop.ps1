@@ -26,6 +26,15 @@ param(
     [switch]$RunOnce
 )
 
+# Comma-separated CLI values (e.g. -TargetBranch master,main) expand to separate pushes.
+$expandedBranches = @()
+foreach ($b in $TargetBranch) {
+    $expandedBranches += ($b -split ',') | ForEach-Object { $_.Trim() } | Where-Object { $_ }
+}
+if ($expandedBranches.Count -gt 0) {
+    $TargetBranch = $expandedBranches
+}
+
 $ErrorActionPreference = "Stop"
 $RepoRoot = Split-Path $PSScriptRoot -Parent
 $SyncScript = Join-Path $RepoRoot "scripts\sync-to-github.ps1"
@@ -36,15 +45,11 @@ if ($IntervalMinutes -lt 1) {
 }
 
 function Invoke-GitHubSync {
-    $branchArgs = @()
-    foreach ($b in $TargetBranch) {
-        $branchArgs += "-TargetBranch"
-        $branchArgs += $b
-    }
+    $branchList = $TargetBranch -join ","
     $prevEap = $ErrorActionPreference
     $ErrorActionPreference = "Continue"
     try {
-        $output = & powershell -NoProfile -ExecutionPolicy Bypass -File $SyncScript @branchArgs 2>&1
+        $output = & powershell -NoProfile -ExecutionPolicy Bypass -File $SyncScript -TargetBranch $branchList 2>&1
         $exitCode = $LASTEXITCODE
     } finally {
         $ErrorActionPreference = $prevEap

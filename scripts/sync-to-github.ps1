@@ -14,10 +14,10 @@
 #>
 param(
     [switch]$DryRun,
-    [string[]]$TargetBranch = @()
+    [string]$TargetBranch = ""
 )
 
-$ErrorActionPreference = "Stop"
+$ErrorActionPreference = "Continue"
 $RepoRoot = Split-Path $PSScriptRoot -Parent
 $LogFile = Join-Path $RepoRoot ".autopilot\github-sync.log"
 
@@ -73,7 +73,10 @@ if (-not $branch) {
     exit 1
 }
 
-$pushTargets = @($TargetBranch | Where-Object { $_ })
+$pushTargets = @()
+if ($TargetBranch) {
+    $pushTargets += ($TargetBranch -split ',') | ForEach-Object { $_.Trim() } | Where-Object { $_ }
+}
 if ($pushTargets.Count -eq 0) {
     $pushTargets = @($branch)
 }
