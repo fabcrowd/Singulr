@@ -60,6 +60,7 @@ class Settings(BaseSettings):
     log_json: bool = False
     verify_rate_limit_per_minute: int = 30
     verify_precheck_per_token_per_minute: int = 10
+    trusted_proxy_ips: str = ""
 
     @property
     def chain_enabled(self) -> bool:
@@ -70,6 +71,13 @@ class Settings(BaseSettings):
     def bot_configured(self) -> bool:
         """True when Telegram bot token is set."""
         return bool(self.bot_token)
+
+    @property
+    def trusted_proxy_ip_list(self) -> list[str]:
+        """Parsed TRUSTED_PROXY_IPS comma-separated list."""
+        if not self.trusted_proxy_ips.strip():
+            return []
+        return [part.strip() for part in self.trusted_proxy_ips.split(",") if part.strip()]
 
     @property
     def trusted_channel_id_list(self) -> list[int]:

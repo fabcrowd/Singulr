@@ -132,6 +132,63 @@ async def test_precheck_returns_challenge_secret(
 
 
 @pytest.mark.asyncio
+@patch("singulr.api.verify.check_known_bad", new_callable=AsyncMock)
+async def test_precheck_omits_ip_flagged_from_response(
+    mock_check: AsyncMock,
+    api_client: httpx.AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """Precheck JSON does not leak ip_flagged oracle to the verify client."""
+    mock_check.return_value = MatchResult(
+        Decision.FLAG,
+        "Elevated risk",
+        ["ip_hash_match"],
+    )
+    token = await create_token(db_session, telegram_user_id=113, channel_id=42)
+
+    response = await api_client.post(
+        "/api/verify/precheck",
+        json={"token": token, "visitor_id": "visitor-no-oracle"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["allowed"] is True
+    assert "ip_flagged" not in body
+
+
+@pytest.mark.asyncio
+@patch("singulr.api.verify.allow_verify_request")
+async def test_precheck_honors_trusted_proxy_for_client_ip(
+    mock_allow: AsyncMock,
+    api_client: httpx.AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """X-Forwarded-For is used only when the direct peer is a trusted proxy."""
+    mock_allow.return_value = True
+    token = await create_token(db_session, telegram_user_id=114, channel_id=42)
+    body = {"token": token, "visitor_id": "visitor-proxy"}
+    headers = {"X-Forwarded-For": "203.0.113.55"}
+
+    with patch("singulr.api.verify.get_settings") as mock_settings:
+        mock_settings.return_value.verify_rate_limit_per_minute = 30
+        mock_settings.return_value.verify_precheck_per_token_per_minute = 100
+        mock_settings.return_value.trusted_proxy_ip_list = []
+        await api_client.post("/api/verify/precheck", json=body, headers=headers)
+
+    assert mock_allow.call_args.args[0] == "127.0.0.1"
+
+    mock_allow.reset_mock()
+    with patch("singulr.api.verify.get_settings") as mock_settings:
+        mock_settings.return_value.verify_rate_limit_per_minute = 30
+        mock_settings.return_value.verify_precheck_per_token_per_minute = 100
+        mock_settings.return_value.trusted_proxy_ip_list = ["127.0.0.1"]
+        await api_client.post("/api/verify/precheck", json=body, headers=headers)
+
+    assert mock_allow.call_args.args[0] == "203.0.113.55"
+
+
+@pytest.mark.asyncio
 async def test_submit_rejects_invalid_challenge(
     api_client: httpx.AsyncClient,
     db_session: AsyncSession,

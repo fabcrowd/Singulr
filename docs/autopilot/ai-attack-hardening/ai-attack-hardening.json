@@ -65,7 +65,7 @@
         "tests/test_api_verify.py covers proxy trust",
         "pytest passes"
       ],
-      "passes": false
+      "passes": true
     },
     {
       "id": "5",

@@ -20,7 +20,7 @@ Production deployment for the FastAPI + Telegram bot stack using Docker Compose.
 
 8. **Rate limits:** `VERIFY_RATE_LIMIT_PER_MINUTE` (default `30`) applies per client IP to both `/api/verify/precheck` and `/api/verify/submit`. Excess requests return HTTP 429.
 
-9. **Reverse proxy (planned):** when deployed behind a trusted load balancer, set `TRUSTED_PROXY_IPS` (comma-separated) so `X-Forwarded-For` is honored only from known hops. Until req 4 ships, rate limits and IP hashing use the direct connection IP.
+9. **Reverse proxy:** when deployed behind a trusted load balancer, set `TRUSTED_PROXY_IPS` (comma-separated) so `X-Forwarded-For` is honored only from known proxy peers. Direct clients cannot spoof forwarded headers.
 
 ### Security presets (`/security` wizard)
 

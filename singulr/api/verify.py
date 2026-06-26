@@ -17,6 +17,7 @@ from singulr.config import VERIFICATION_SENTENCE, get_settings
 from singulr.db import get_session
 from singulr.models import IPSession, Profile
 from singulr.services.bans import record_ban as persist_ban
+from singulr.services.client_ip import resolve_client_ip
 from singulr.services.blockchain import ChainClient
 from singulr.services.channel_policy import EffectivePolicy, get_effective_channel_policy
 from singulr.services.hashing import hash_fingerprint, hash_ip
@@ -70,12 +71,8 @@ class SubmitBody(BaseModel):
 
 def _client_ip(request: Request) -> str:
     """Extract client IP from proxy headers or socket."""
-    forwarded = request.headers.get("x-forwarded-for")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-    if request.client:
-        return request.client.host
-    return "0.0.0.0"
+    settings = get_settings()
+    return resolve_client_ip(request, settings.trusted_proxy_ip_list)
 
 
 def _enforce_verify_rate_limit(request: Request) -> None:
@@ -246,7 +243,6 @@ async def precheck(
         "allowed": True,
         "sentence": VERIFICATION_SENTENCE,
         "fingerprint_public_key": get_settings().fingerprint_public_key or None,
-        "ip_flagged": "ip_hash_match" in result.risk_factors,
         "challenge_secret": challenge_secret,
     }
 
