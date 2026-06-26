@@ -34,6 +34,7 @@ class VerificationToken(Base):
         DateTime(timezone=True), nullable=True
     )
     verify_challenge_secret: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    bound_visitor_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
 
 
 class Profile(Base):

@@ -39,6 +39,7 @@ class SlidingWindowRateLimiter:
 
 
 _verify_limiter: SlidingWindowRateLimiter | None = None
+_precheck_token_limiter: SlidingWindowRateLimiter | None = None
 
 
 def get_verify_limiter(limit_per_minute: int) -> SlidingWindowRateLimiter:
@@ -59,3 +60,18 @@ def reset_verify_limiter() -> None:
     """Reset verify limiter state (tests only)."""
     if _verify_limiter is not None:
         _verify_limiter.reset()
+    if _precheck_token_limiter is not None:
+        _precheck_token_limiter.reset()
+
+
+def get_precheck_token_limiter(limit_per_minute: int) -> SlidingWindowRateLimiter:
+    """Return process-wide per-token precheck limiter."""
+    global _precheck_token_limiter
+    if _precheck_token_limiter is None or _precheck_token_limiter._limit != limit_per_minute:
+        _precheck_token_limiter = SlidingWindowRateLimiter(limit_per_minute)
+    return _precheck_token_limiter
+
+
+def allow_precheck_for_token(token: str, *, limit_per_minute: int) -> bool:
+    """Check whether another precheck for this verification token is allowed."""
+    return get_precheck_token_limiter(limit_per_minute).allow(token)

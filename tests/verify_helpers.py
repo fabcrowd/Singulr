@@ -18,6 +18,7 @@ async def challenge_proof_for(
     *,
     visitor_id: str = "visitor-api-test",
     session: AsyncSession | None = None,
+    bound_visitor_id: str | None = None,
 ) -> str:
     """Return HMAC challenge proof for verify submit tests.
 
@@ -29,6 +30,9 @@ async def challenge_proof_for(
         token_row = await validate_token(session, token)
         assert token_row is not None
         token_row.verify_challenge_secret = secret
+        token_row.bound_visitor_id = (
+            bound_visitor_id if bound_visitor_id is not None else visitor_id
+        )
         await session.commit()
         return compute_challenge_proof(secret, token=token, visitor_id=visitor_id)
 

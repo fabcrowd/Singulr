@@ -59,6 +59,7 @@ class Settings(BaseSettings):
     admin_ops_chat_id: int = 0
     log_json: bool = False
     verify_rate_limit_per_minute: int = 30
+    verify_precheck_per_token_per_minute: int = 10
 
     @property
     def chain_enabled(self) -> bool:

@@ -23,7 +23,7 @@ from singulr.services.hashing import hash_fingerprint, hash_ip
 from singulr.services.keystroke import build_keystroke_profile
 from singulr.services.matching import Decision, MatchResult, check_known_bad
 from singulr.services.reverification import STATUS_APPROVED, get_profile, is_reverification_required
-from singulr.services.rate_limit import allow_verify_request
+from singulr.services.rate_limit import allow_precheck_for_token, allow_verify_request
 from singulr.services.tokens import validate_token, claim_verification_token
 from singulr.services.verify_ban import block_ban_taxonomy
 from singulr.services.verify_session import (
@@ -83,6 +83,35 @@ def _enforce_verify_rate_limit(request: Request) -> None:
     if not allow_verify_request(
         _client_ip(request),
         limit_per_minute=settings.verify_rate_limit_per_minute,
+    ):
+        raise HTTPException(status_code=429, detail="rate_limited")
+
+
+def _allow_visitor_id_rebind(bound: str, visitor_id: str) -> bool:
+    """Allow upgrading from fallback fingerprint visitor id to FingerprintJS id."""
+    return bound.startswith("fb_") and not visitor_id.startswith("fb_")
+
+
+def _bind_precheck_visitor_id(token_row: Any, visitor_id: str) -> None:
+    """Record or validate visitor_id on the token during precheck."""
+    bound = token_row.bound_visitor_id
+    if bound is None:
+        token_row.bound_visitor_id = visitor_id
+        return
+    if bound == visitor_id:
+        return
+    if _allow_visitor_id_rebind(bound, visitor_id):
+        token_row.bound_visitor_id = visitor_id
+        return
+    raise HTTPException(status_code=400, detail="visitor_id_mismatch")
+
+
+def _enforce_precheck_token_rate_limit(token: str) -> None:
+    """Raise 429 when precheck for this token exceeds the per-token rate limit."""
+    settings = get_settings()
+    if not allow_precheck_for_token(
+        token,
+        limit_per_minute=settings.verify_precheck_per_token_per_minute,
     ):
         raise HTTPException(status_code=429, detail="rate_limited")
 
@@ -173,9 +202,12 @@ async def precheck(
 ) -> dict[str, Any]:
     """Run ban checks before rendering the verification form."""
     _enforce_verify_rate_limit(request)
+    _enforce_precheck_token_rate_limit(body.token)
     token_row = await validate_token(session, body.token)
     if not token_row:
         raise HTTPException(status_code=410, detail="link_expired")
+
+    _bind_precheck_visitor_id(token_row, body.visitor_id)
 
     fingerprint_hash = hash_fingerprint(body.visitor_id, body.request_id)
     ip_hash = hash_ip(_client_ip(request))
@@ -244,6 +276,14 @@ async def submit(
     ):
         raise HTTPException(status_code=400, detail="challenge_invalid")
 
+    policy = await get_effective_channel_policy(session, token_row.channel_id)
+    visitor_mismatch = bool(
+        token_row.bound_visitor_id
+        and token_row.bound_visitor_id != body.visitor_id
+    )
+    if visitor_mismatch and policy.security_preset == "strict":
+        raise HTTPException(status_code=400, detail="visitor_id_mismatch")
+
     token_row = await claim_verification_token(session, body.token)
     if not token_row:
         raise HTTPException(status_code=410, detail="link_expired")
@@ -258,19 +298,25 @@ async def submit(
     )
     env_flags = body.env_flags.model_dump() if body.env_flags else None
 
-    policy = await get_effective_channel_policy(session, token_row.channel_id)
-    result = await check_known_bad(
-        session,
-        _chain,
-        telegram_user_id=token_row.telegram_user_id,
-        fingerprint_hash=fingerprint_hash,
-        ip_hash=ip_hash,
-        keystroke_profile=keystroke_profile,
-        env_flags=env_flags,
-        channel_id=token_row.channel_id,
-        policy=policy,
-        token_row=token_row,
-    )
+    if visitor_mismatch:
+        result = MatchResult(
+            Decision.PENDING,
+            "Visitor fingerprint mismatch",
+            ["visitor_id_mismatch"],
+        )
+    else:
+        result = await check_known_bad(
+            session,
+            _chain,
+            telegram_user_id=token_row.telegram_user_id,
+            fingerprint_hash=fingerprint_hash,
+            ip_hash=ip_hash,
+            keystroke_profile=keystroke_profile,
+            env_flags=env_flags,
+            channel_id=token_row.channel_id,
+            policy=policy,
+            token_row=token_row,
+        )
 
     session.add(
         IPSession(

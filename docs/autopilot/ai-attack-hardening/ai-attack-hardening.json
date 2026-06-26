@@ -39,7 +39,7 @@
         "tests/test_verify_rate_limit.py or test_api_verify.py extended",
         "pytest passes"
       ],
-      "passes": false
+      "passes": true
     },
     {
       "id": "3",

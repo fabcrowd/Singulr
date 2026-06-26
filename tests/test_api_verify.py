@@ -144,6 +144,84 @@ async def test_submit_rejects_invalid_challenge(
 
 
 @pytest.mark.asyncio
+async def test_precheck_rejects_visitor_id_change_after_bind(
+    api_client: httpx.AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """Second precheck with a different visitor_id is rejected."""
+    token = await create_token(db_session, telegram_user_id=225, channel_id=42)
+
+    first = await api_client.post(
+        "/api/verify/precheck",
+        json={"token": token, "visitor_id": "visitor-first"},
+    )
+    assert first.status_code == 200
+
+    second = await api_client.post(
+        "/api/verify/precheck",
+        json={"token": token, "visitor_id": "visitor-second"},
+    )
+
+    assert second.status_code == 400
+    assert second.json()["detail"] == "visitor_id_mismatch"
+
+
+@pytest.mark.asyncio
+async def test_precheck_allows_fallback_to_fingerprint_visitor_upgrade(
+    api_client: httpx.AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """Precheck may upgrade from fallback fb_ visitor id to FingerprintJS id."""
+    token = await create_token(db_session, telegram_user_id=226, channel_id=42)
+
+    first = await api_client.post(
+        "/api/verify/precheck",
+        json={"token": token, "visitor_id": "fb_12345"},
+    )
+    assert first.status_code == 200
+
+    second = await api_client.post(
+        "/api/verify/precheck",
+        json={"token": token, "visitor_id": "fingerprint-real-id"},
+    )
+
+    assert second.status_code == 200
+
+
+@pytest.mark.asyncio
+@patch("singulr.api.verify._notify_bot", new_callable=AsyncMock)
+async def test_submit_visitor_id_mismatch_forces_pending(
+    mock_notify: AsyncMock,
+    api_client: httpx.AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """Submit with visitor_id different from bound token value forces pending."""
+    token = await create_token(db_session, telegram_user_id=227, channel_id=42)
+    proof = await challenge_proof_for(
+        api_client,
+        token,
+        visitor_id="visitor-submit",
+        session=db_session,
+        bound_visitor_id="visitor-bound",
+    )
+
+    response = await api_client.post(
+        "/api/verify/submit",
+        json=_submit_body(
+            token,
+            challenge_proof=proof,
+            visitor_id="visitor-submit",
+        ),
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["decision"] == "pending"
+    assert "visitor_id_mismatch" in body.get("risk_factors", [])
+    mock_notify.assert_awaited_once()
+
+
+@pytest.mark.asyncio
 @patch("singulr.api.verify._notify_bot", new_callable=AsyncMock)
 async def test_submit_rejects_reused_token(
     _mock_notify: AsyncMock,

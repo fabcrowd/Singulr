@@ -32,6 +32,7 @@ async def test_precheck_returns_429_when_rate_limited(
 
     with patch("singulr.api.verify.get_settings") as mock_settings:
         mock_settings.return_value.verify_rate_limit_per_minute = 2
+        mock_settings.return_value.verify_precheck_per_token_per_minute = 100
         first = await api_client.post("/api/verify/precheck", json=body)
         second = await api_client.post("/api/verify/precheck", json=body)
         third = await api_client.post("/api/verify/precheck", json=body)
@@ -64,9 +65,32 @@ async def test_submit_returns_429_when_rate_limited(
 
     with patch("singulr.api.verify.get_settings") as mock_settings:
         mock_settings.return_value.verify_rate_limit_per_minute = 1
+        mock_settings.return_value.verify_precheck_per_token_per_minute = 100
         first = await api_client.post("/api/verify/submit", json=body)
         second = await api_client.post("/api/verify/submit", json=body)
 
     assert first.status_code in {200, 400, 410}
     assert second.status_code == 429
     assert second.json()["detail"] == "rate_limited"
+
+
+@pytest.mark.asyncio
+async def test_precheck_returns_429_when_per_token_rate_limited(
+    api_client: httpx.AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """Excess precheck requests for one token return HTTP 429."""
+    token = await create_token(db_session, telegram_user_id=8803, channel_id=1)
+    body = {"token": token, "visitor_id": "token-rate-visitor"}
+
+    with patch("singulr.api.verify.get_settings") as mock_settings:
+        mock_settings.return_value.verify_rate_limit_per_minute = 100
+        mock_settings.return_value.verify_precheck_per_token_per_minute = 2
+        first = await api_client.post("/api/verify/precheck", json=body)
+        second = await api_client.post("/api/verify/precheck", json=body)
+        third = await api_client.post("/api/verify/precheck", json=body)
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert third.status_code == 429
+    assert third.json()["detail"] == "rate_limited"
