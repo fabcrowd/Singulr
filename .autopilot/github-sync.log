@@ -168,3 +168,14 @@
 2026-06-26T07:38:55.7021518-04:00 To https://github.com/fabcrowd/Singulr.git
 2026-06-26T07:38:55.7031518-04:00    4e33a3f..98cbae3  HEAD -> main
 2026-06-26T07:38:55.7106386-04:00 OK: synced 2 path(s) to origin/master,main
+2026-06-26T08:06:14.3070175-04:00 WARN: unstaged secret file(s): .env.example
+2026-06-26T08:06:14.4404521-04:00 [master 92e09e5] chore: sync local work 2026-06-26 08:06
+2026-06-26T08:06:14.4409555-04:00  7 files changed, 420 insertions(+), 1 deletion(-)
+2026-06-26T08:06:14.4429590-04:00  create mode 100644 docs/autopilot/ai-attack-hardening/ai-attack-hardening-notes.md
+2026-06-26T08:06:14.4434628-04:00  create mode 100644 docs/autopilot/ai-attack-hardening/ai-attack-hardening.json
+2026-06-26T08:06:14.4444850-04:00  create mode 100644 docs/autopilot/ai-attack-hardening/ai-attack-hardening.md
+2026-06-26T08:06:14.4454885-04:00  create mode 100644 docs/plans/ai-attack-hardening-brainstorm.md
+2026-06-26T08:06:14.4464942-04:00 PUSH: origin HEAD -> master (local branch: master)
+2026-06-26T08:06:15.6944009-04:00 To https://github.com/fabcrowd/Singulr.git
+2026-06-26T08:06:15.6964225-04:00    98cbae3..92e09e5  HEAD -> master
+2026-06-26T08:06:15.7014048-04:00 OK: synced 7 path(s) to origin/master
