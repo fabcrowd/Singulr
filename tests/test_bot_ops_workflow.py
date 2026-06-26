@@ -178,6 +178,38 @@ async def test_permit_callback_grants_access_and_dms_user(monkeypatch: pytest.Mo
 
 
 @pytest.mark.asyncio
+async def test_permit_callback_rejects_non_admin(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Non-admins cannot permit a pending verification via ops callback."""
+    grant_access = AsyncMock()
+    notify = AsyncMock()
+    monkeypatch.setattr("singulr.bot.handlers.grant_access", grant_access)
+    monkeypatch.setattr("singulr.bot.handlers.notify_user_result", notify)
+
+    query = MagicMock()
+    query.data = "permit_42_704"
+    query.answer = AsyncMock()
+    query.from_user = MagicMock()
+    query.from_user.id = 99
+    query.get_bot = MagicMock()
+    query.get_bot.return_value.get_chat_member = AsyncMock(
+        return_value=MagicMock(status="member")
+    )
+    query.message = MagicMock()
+    query.message.reply_text = AsyncMock()
+    update = MagicMock()
+    update.callback_query = query
+    context = MagicMock()
+    context.application = _mock_app()
+
+    await on_callback(update, context)
+
+    grant_access.assert_not_awaited()
+    notify.assert_not_awaited()
+    query.message.reply_text.assert_awaited_once()
+    assert "administrators" in query.message.reply_text.await_args.args[0].lower()
+
+
+@pytest.mark.asyncio
 async def test_deny_callback_dms_denial_reason(monkeypatch: pytest.MonkeyPatch) -> None:
     """Deny callback bans user and sends a denial reason DM."""
     ban_member = AsyncMock()

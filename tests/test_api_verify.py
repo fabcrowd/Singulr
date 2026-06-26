@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, patch
 
 import httpx
 import pytest
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from singulr.config import VERIFICATION_SENTENCE
-from singulr.models import Ban
+from singulr.models import Ban, VerificationToken
 from singulr.services.hashing import hash_fingerprint
 from singulr.services.matching import Decision, MatchResult
 from singulr.services.tokens import create_token
@@ -392,6 +394,50 @@ async def test_submit_rejects_reused_token(
     )
     assert second.status_code == 410
     assert second.json()["detail"] == "link_expired"
+
+
+@pytest.mark.asyncio
+async def test_submit_rejects_when_privacy_not_accepted(
+    api_client: httpx.AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """Submit returns 400 when privacy checkbox is not accepted."""
+    token = await create_token(db_session, telegram_user_id=224, channel_id=42)
+
+    response = await api_client.post(
+        "/api/verify/submit",
+        json=_submit_body(
+            token,
+            challenge_proof="unused",
+            privacy_accepted=False,
+        ),
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "privacy_required"
+
+
+@pytest.mark.asyncio
+async def test_precheck_returns_410_for_expired_token(
+    api_client: httpx.AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """Precheck rejects expired verification tokens."""
+    token = await create_token(db_session, telegram_user_id=225, channel_id=42)
+    row = await db_session.scalar(
+        select(VerificationToken).where(VerificationToken.token == token)
+    )
+    assert row is not None
+    row.expires_at = datetime.now(UTC) - timedelta(minutes=1)
+    await db_session.commit()
+
+    response = await api_client.post(
+        "/api/verify/precheck",
+        json={"token": token, "visitor_id": _VISITOR_ID, "request_id": "req-1"},
+    )
+
+    assert response.status_code == 410
+    assert response.json()["detail"] == "link_expired"
 
 
 @pytest.mark.asyncio
