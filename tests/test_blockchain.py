@@ -98,3 +98,33 @@ async def test_record_ban_skipped_when_chain_disabled() -> None:
 
     assert client.enabled is False
     assert tx_hash is None
+
+
+def test_chain_client_survives_web3_init_failure() -> None:
+    """RPC or artifact init errors leave chain reads unavailable (fail-open reads)."""
+    settings = Settings(
+        contract_address="0x1234567890123456789012345678901234567890",
+        wallet_private_key="0x" + "4" * 64,
+    )
+
+    with patch("singulr.services.blockchain.get_settings", return_value=settings):
+        with patch("web3.Web3", side_effect=OSError("rpc down")):
+            client = ChainClient()
+
+    assert client._contract is None
+
+
+@pytest.mark.asyncio
+async def test_is_banned_fail_open_when_contract_unavailable_after_init_error() -> None:
+    """is_banned returns False when chain client could not initialize."""
+    settings = Settings(
+        contract_address="0x1234567890123456789012345678901234567890",
+        wallet_private_key="0x" + "5" * 64,
+    )
+
+    with patch("singulr.services.blockchain.get_settings", return_value=settings):
+        with patch("web3.Web3", side_effect=OSError("rpc down")):
+            client = ChainClient()
+            banned = await client.is_banned("0x" + "fe" * 32)
+
+    assert banned is False
