@@ -14,6 +14,7 @@ from singulr.config import get_settings
 from singulr.services.channel_policy import EffectivePolicy
 from singulr.services.join_velocity import record_join_request, reset_join_velocity_tracker
 from singulr.services.keystroke import build_keystroke_profile, keystroke_similarity
+from singulr.services.blockchain import ChainUnavailableError
 from singulr.services.matching import Decision, check_known_bad
 from singulr.services.stylometry import extract_features, merge_feature_vectors, stylometry_similarity
 
@@ -478,3 +479,49 @@ async def test_social_hard_category_instant_ban(
 
     assert result.decision == Decision.BLOCK
     assert any("social_hard" in factor for factor in result.risk_factors)
+
+
+@pytest.mark.asyncio
+async def test_chain_unavailable_on_is_banned_returns_pending(
+    db_session: AsyncSession,
+) -> None:
+    """RPC failure during is_banned forces pending review (fail-closed)."""
+    chain = MagicMock()
+    chain.is_banned = AsyncMock(side_effect=ChainUnavailableError("rpc down"))
+    chain.get_reputation = AsyncMock()
+
+    result = await check_known_bad(
+        db_session,
+        chain,
+        telegram_user_id=88888,
+        fingerprint_hash="0x" + "55" * 32,
+        ip_hash=None,
+    )
+
+    assert result.decision == Decision.PENDING
+    assert "chain_unavailable" in result.risk_factors
+    chain.get_reputation.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_chain_unavailable_on_reputation_returns_pending(
+    db_session: AsyncSession,
+) -> None:
+    """RPC failure during get_reputation forces pending review."""
+    chain = MagicMock()
+    chain.is_banned = AsyncMock(return_value=False)
+    chain.get_reputation = AsyncMock(side_effect=ChainUnavailableError("rpc timeout"))
+    policy = replace(_DEFAULT_POLICY, network_registry_mode="read")
+
+    result = await check_known_bad(
+        db_session,
+        chain,
+        telegram_user_id=88889,
+        fingerprint_hash="0x" + "66" * 32,
+        ip_hash=None,
+        channel_id=42,
+        policy=policy,
+    )
+
+    assert result.decision == Decision.PENDING
+    assert "chain_unavailable" in result.risk_factors

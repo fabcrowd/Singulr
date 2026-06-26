@@ -19,6 +19,10 @@ _ARTIFACT_PATH = (
 )
 
 
+class ChainUnavailableError(Exception):
+    """Raised when chain reads are required but RPC or contract init failed."""
+
+
 class ChainClient:
     """Thin wrapper around BanRegistry contract."""
 
@@ -51,6 +55,16 @@ class ChainClient:
         """True when chain integration is configured or a contract is injected."""
         return self._configured or self._contract is not None
 
+    @property
+    def reads_required(self) -> bool:
+        """True when env expects on-chain ban registry reads at verify time."""
+        return self._configured
+
+    @property
+    def reads_available(self) -> bool:
+        """True when the contract client initialized successfully."""
+        return self._contract is not None
+
     def _fp_bytes32(self, fingerprint_hash: str) -> bytes:
         """Normalize fingerprint hash to bytes32 for contract calls."""
         value = fingerprint_hash.lower()
@@ -58,21 +72,36 @@ class ChainClient:
             value = value[2:]
         return bytes.fromhex(value.zfill(64))
 
+    def _require_reads(self) -> None:
+        """Fail closed when chain is configured but reads are unavailable."""
+        if self._configured and not self._contract:
+            raise ChainUnavailableError("chain contract unavailable")
+
     async def is_banned(self, fingerprint_hash: str) -> bool:
         """Return True when fingerprint is on-chain banned."""
-        if not self._contract:
+        if not self._configured:
             return False
-        return bool(
-            self._contract.functions.isBanned(self._fp_bytes32(fingerprint_hash)).call()
-        )
+        self._require_reads()
+        assert self._contract is not None
+        try:
+            return bool(
+                self._contract.functions.isBanned(self._fp_bytes32(fingerprint_hash)).call()
+            )
+        except Exception as exc:
+            raise ChainUnavailableError("chain rpc error") from exc
 
     async def get_reputation(self, fingerprint_hash: str) -> dict[str, int]:
         """Return aggregated on-chain score and active ban count."""
-        if not self._contract:
+        if not self._configured:
             return {"score": 0, "active_bans": 0}
-        score, active_bans = self._contract.functions.getReputation(
-            self._fp_bytes32(fingerprint_hash)
-        ).call()
+        self._require_reads()
+        assert self._contract is not None
+        try:
+            score, active_bans = self._contract.functions.getReputation(
+                self._fp_bytes32(fingerprint_hash)
+            ).call()
+        except Exception as exc:
+            raise ChainUnavailableError("chain rpc error") from exc
         return {"score": int(score), "active_bans": int(active_bans)}
 
     async def register_fingerprint(self, fingerprint_hash: str, channel_id: int) -> str | None:

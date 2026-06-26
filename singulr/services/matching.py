@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from singulr.config import get_settings
 from singulr.models import Ban, IPSession, Profile, VerificationToken
 from singulr.services.automation_score import compute_automation_score, resolve_automation_outcome
-from singulr.services.blockchain import ChainClient
+from singulr.services.blockchain import ChainClient, ChainUnavailableError
 from singulr.services.channel_policy import (
     DEFAULT_INSTANT_BAN_CATEGORIES,
     DEFAULT_NETWORK_AUTO_REJECT,
@@ -35,6 +35,17 @@ from singulr.services.social_profile import (
 from singulr.services.stylometry import stylometry_similarity
 
 ENV_ANOMALY_RISK = 20
+CHAIN_UNAVAILABLE_REASON = "Chain registry unavailable — manual review required"
+
+
+def _chain_unavailable_result(factors: list[str]) -> MatchResult:
+    """Pending review when configured chain reads cannot be performed."""
+    factors.append("chain_unavailable")
+    return MatchResult(
+        Decision.PENDING,
+        CHAIN_UNAVAILABLE_REASON,
+        factors,
+    )
 
 
 class Decision(str, Enum):
@@ -205,16 +216,22 @@ async def check_known_bad(
             matched_ban_id=ban_by_fp.id,
         )
 
-    if await chain.is_banned(fingerprint_hash):
-        factors.append("chain_blacklist")
-        return MatchResult(
-            Decision.PENDING,
-            "Cross-channel network history requires review",
-            factors,
-        )
+    try:
+        if await chain.is_banned(fingerprint_hash):
+            factors.append("chain_blacklist")
+            return MatchResult(
+                Decision.PENDING,
+                "Cross-channel network history requires review",
+                factors,
+            )
+    except ChainUnavailableError:
+        return _chain_unavailable_result(factors)
 
     if effective_policy.network_registry_mode != "off":
-        reputation = await chain.get_reputation(fingerprint_hash)
+        try:
+            reputation = await chain.get_reputation(fingerprint_hash)
+        except ChainUnavailableError:
+            return _chain_unavailable_result(factors)
         if reputation["active_bans"] > 0:
             related_bans = (
                 await session.scalars(select(Ban).where(Ban.fingerprint_hash == fingerprint_hash))

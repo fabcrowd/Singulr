@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import pytest
@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from singulr.config import VERIFICATION_SENTENCE
 from singulr.models import Ban, VerificationToken
 from singulr.services.hashing import hash_fingerprint
+from singulr.services.blockchain import ChainUnavailableError
 from singulr.services.matching import Decision, MatchResult
 from singulr.services.tokens import create_token
 from verify_helpers import challenge_proof_for
@@ -612,6 +613,37 @@ async def test_submit_block_ban_evasion_auto_deny_not_pending(
     notify_payload = mock_notify.await_args.args[0]
     assert notify_payload["decision"] == "block"
     assert notify_payload["security_preset"] == "balanced"
+
+
+@pytest.mark.asyncio
+@patch("singulr.api.verify._notify_bot", new_callable=AsyncMock)
+async def test_submit_pending_when_chain_unavailable(
+    mock_notify: AsyncMock,
+    api_client: httpx.AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """Submit maps chain RPC failure to pending and notifies ops via bot webhook."""
+    chain = MagicMock()
+    chain.is_banned = AsyncMock(side_effect=ChainUnavailableError("rpc down"))
+    chain.get_reputation = AsyncMock()
+
+    token = await create_token(db_session, telegram_user_id=902, channel_id=42)
+    proof = await challenge_proof_for(api_client, token, session=db_session)
+
+    with patch("singulr.api.verify._chain", chain):
+        response = await api_client.post(
+            "/api/verify/submit",
+            json=_submit_body(token, challenge_proof=proof),
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["decision"] == "pending"
+    assert "chain_unavailable" in body.get("risk_factors", [])
+    mock_notify.assert_awaited_once()
+    notify_payload = mock_notify.await_args.args[0]
+    assert notify_payload["decision"] == "pending"
+    assert "chain_unavailable" in notify_payload.get("risk_factors", [])
 
 
 @pytest.mark.asyncio

@@ -46,7 +46,7 @@
 | P1-5 | **Critical** | `contracts/BanRegistry.sol` | Add Hardhat tests; add `npx hardhat test` to CI / verify gate |
 | P1-6 | **Medium** | `api/verify.py` `admin_ban` | Pydantic body; validate category/severity; 422 on bad input |
 | P1-7 | **Medium** | `api/verify.py` submit response | Strip internal fields from client JSON (risk_factors, matched_ban_id) |
-| P1-8 | **Medium** | `services/blockchain.py` | Fail-closed on RPC error → PENDING + ops alert; test init failure path |
+| P1-8 | **Medium** | `services/blockchain.py` | Fail-closed on RPC error → PENDING + ops alert; test init failure path | **DONE** (2026-06-26) |
 | P1-9 | **Medium** | `services/rate_limit.py` | Redis/shared limiter for multi-worker deploy; admin route limits |
 | P1-10 | **Medium** | `api/verify.py` `SubmitBody.keystrokes` | `max_length` + request body size cap |
 | P1-11 | **Medium** | `tokens.py` `create_token` | Fix count race (serializable tx or `FOR UPDATE`) |

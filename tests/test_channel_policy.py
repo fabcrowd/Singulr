@@ -99,3 +99,26 @@ def test_effective_policy_field_types() -> None:
     assert isinstance(policy.security_preset, str)
     assert isinstance(policy.automation_flag_mode, str)
     assert isinstance(policy.ai_pending_score_threshold, int)
+
+
+@pytest.mark.asyncio
+async def test_format_policy_summary_includes_automation_line(
+    db_session: AsyncSession,
+) -> None:
+    """Wizard confirmation summary includes automation strictness settings."""
+    from singulr.services.channel_policy import format_policy_summary, upsert_channel_security_settings
+
+    row = await upsert_channel_security_settings(
+        db_session,
+        channel_id=88020,
+        preset="balanced",
+        evasion_mode="high_only",
+        admin_ops_chat_id=-100999,
+        automation_flag_mode="pending",
+        ai_pending_score_threshold=45,
+    )
+
+    summary = format_policy_summary(row)
+
+    assert "Automation handling: pending (score threshold: 45)" in summary
+    assert "Preset: balanced" in summary

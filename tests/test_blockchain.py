@@ -8,7 +8,7 @@ import pytest
 
 from singulr.config import Settings
 from singulr.domain.ban_taxonomy import BanCategory, BanSeverity
-from singulr.services.blockchain import ChainClient
+from singulr.services.blockchain import ChainClient, ChainUnavailableError
 
 
 def test_chain_client_disabled_without_contract_address() -> None:
@@ -101,7 +101,7 @@ async def test_record_ban_skipped_when_chain_disabled() -> None:
 
 
 def test_chain_client_survives_web3_init_failure() -> None:
-    """RPC or artifact init errors leave chain reads unavailable (fail-open reads)."""
+    """RPC or artifact init errors mark chain reads unavailable."""
     settings = Settings(
         contract_address="0x1234567890123456789012345678901234567890",
         wallet_private_key="0x" + "4" * 64,
@@ -111,12 +111,14 @@ def test_chain_client_survives_web3_init_failure() -> None:
         with patch("web3.Web3", side_effect=OSError("rpc down")):
             client = ChainClient()
 
+    assert client.reads_required is True
+    assert client.reads_available is False
     assert client._contract is None
 
 
 @pytest.mark.asyncio
-async def test_is_banned_fail_open_when_contract_unavailable_after_init_error() -> None:
-    """is_banned returns False when chain client could not initialize."""
+async def test_is_banned_raises_when_contract_unavailable_after_init_error() -> None:
+    """Configured chain fails closed when the contract client did not initialize."""
     settings = Settings(
         contract_address="0x1234567890123456789012345678901234567890",
         wallet_private_key="0x" + "5" * 64,
@@ -125,6 +127,22 @@ async def test_is_banned_fail_open_when_contract_unavailable_after_init_error() 
     with patch("singulr.services.blockchain.get_settings", return_value=settings):
         with patch("web3.Web3", side_effect=OSError("rpc down")):
             client = ChainClient()
-            banned = await client.is_banned("0x" + "fe" * 32)
+            with pytest.raises(ChainUnavailableError):
+                await client.is_banned("0x" + "fe" * 32)
 
-    assert banned is False
+
+@pytest.mark.asyncio
+async def test_is_banned_raises_on_rpc_call_error() -> None:
+    """RPC errors during isBanned propagate as ChainUnavailableError."""
+    settings = Settings(
+        contract_address="0x1234567890123456789012345678901234567890",
+        wallet_private_key="0x" + "6" * 64,
+    )
+    mock_contract = MagicMock()
+    mock_contract.functions.isBanned.return_value.call.side_effect = OSError("rpc timeout")
+
+    with patch("singulr.services.blockchain.get_settings", return_value=settings):
+        client = ChainClient()
+        client._contract = mock_contract
+        with pytest.raises(ChainUnavailableError):
+            await client.is_banned("0x" + "cd" * 32)
