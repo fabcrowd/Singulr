@@ -1,0 +1,7 @@
+# ai-attack-hardening notes
+
+- [2026-06-26] Brainstorm completed: `docs/plans/ai-attack-hardening-brainstorm.md`
+- [2026-06-26] PRD + task pack created (10 requirements, Phases 1–3)
+- Lead decision: start with req 1 (session binding) — highest ROI vs curl/LLM API bypass
+
+- [2026-06-26 11:43 UTC] Assigned req 1 to Cursor (NEXT_TASK)

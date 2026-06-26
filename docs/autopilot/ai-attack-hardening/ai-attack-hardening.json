@@ -1,0 +1,147 @@
+{
+  "$schema": "https://raw.githubusercontent.com/Gens-ai/autopilot/main/tasks.schema.json",
+  "name": "ai-attack-hardening",
+  "description": "Harden verify and join flows against AI agents, automation, keystroke replay, and bot farms",
+  "goals": [
+    "Server-verifiable verify sessions; no raw API submit bypass",
+    "Automation and synthetic keystroke detection with channel policy",
+    "Precheck oracle closed; join burst signals for farm waves",
+    "Regression tests for every new control"
+  ],
+  "nonGoals": [
+    "Mandatory CAPTCHA for all channels",
+    "In-repo ML model training",
+    "Premium-user blocking by default"
+  ],
+  "_tdd": true,
+  "requirements": [
+    {
+      "id": "1",
+      "category": "security",
+      "priority": "critical",
+      "description": "Verify session binding: precheck issues challenge secret; submit requires valid proof",
+      "acceptance": [
+        "precheck returns session challenge fields",
+        "submit without valid challenge_proof returns 400",
+        "tests/test_api_verify.py covers replay rejection",
+        "scripts/verify.ps1 green"
+      ],
+      "passes": false
+    },
+    {
+      "id": "2",
+      "category": "security",
+      "priority": "critical",
+      "description": "Per-token precheck rate limit and first visitor_id bind on token row",
+      "acceptance": [
+        "Precheck throttled per token",
+        "Submit with mismatched visitor_id vs first precheck forces pending or 400 per policy",
+        "tests/test_verify_rate_limit.py or test_api_verify.py extended",
+        "pytest passes"
+      ],
+      "passes": false
+    },
+    {
+      "id": "3",
+      "category": "security",
+      "priority": "high",
+      "description": "Keystroke plausibility validation and payload bounds on submit",
+      "acceptance": [
+        "SubmitBody enforces max keystrokes length and body size",
+        "Flat/synthetic rhythm flagged synthetic_keystroke in risk_factors",
+        "tests cover too-fast and too-uniform keystroke sessions",
+        "verify.ps1 green"
+      ],
+      "passes": false
+    },
+    {
+      "id": "4",
+      "category": "security",
+      "priority": "high",
+      "description": "Precheck oracle reduction and trusted proxy IP handling",
+      "acceptance": [
+        "ip_flagged not returned to verify client JSON",
+        "TRUSTED_PROXY_IPS env honored for X-Forwarded-For",
+        "tests/test_api_verify.py covers proxy trust",
+        "pytest passes"
+      ],
+      "passes": false
+    },
+    {
+      "id": "5",
+      "category": "security",
+      "priority": "high",
+      "description": "Channel policy automation_flag_mode and ai_pending_score_threshold",
+      "acceptance": [
+        "ChannelSecuritySettings has automation fields",
+        "get_effective_channel_policy exposes them",
+        "tests/test_channel_policy.py covers defaults",
+        "verify.ps1 green"
+      ],
+      "passes": false
+    },
+    {
+      "id": "6",
+      "category": "security",
+      "priority": "high",
+      "description": "Extended env_flags collection and composite automation score in matching",
+      "acceptance": [
+        "static/verify.js collects extended env signals",
+        "matching.py computes automation contribution to pending decision",
+        "tests/test_matching.py covers webdriver pending under strict automation mode",
+        "pytest passes"
+      ],
+      "passes": false
+    },
+    {
+      "id": "7",
+      "category": "security",
+      "priority": "medium",
+      "description": "Security wizard v4 step for automation strictness",
+      "acceptance": [
+        "CURRENT_WIZARD_VERSION bumped with automation step",
+        "tests/test_security_wizard.py covers new step",
+        "verify.ps1 green"
+      ],
+      "passes": false
+    },
+    {
+      "id": "8",
+      "category": "security",
+      "priority": "medium",
+      "description": "Join velocity tracker per channel",
+      "acceptance": [
+        "singulr/services/join_velocity.py exists",
+        "on_join_request records join events",
+        "tests/test_join_velocity.py covers burst detection",
+        "pytest passes"
+      ],
+      "passes": false
+    },
+    {
+      "id": "9",
+      "category": "security",
+      "priority": "medium",
+      "description": "Join burst score wired into verify matching and ops logging",
+      "acceptance": [
+        "High join velocity adds risk factor at verify submit",
+        "log_to_ops_channel includes burst context when applicable",
+        "tests cover burst factor in check_known_bad",
+        "verify.ps1 green"
+      ],
+      "passes": false
+    },
+    {
+      "id": "10",
+      "category": "ship",
+      "priority": "medium",
+      "description": "AI hardening operator docs and audit report",
+      "acceptance": [
+        "docs/autopilot/ai-attack-hardening/HARDEN_REPORT.md exists",
+        "DEPLOY.md documents new env vars and strict preset behavior",
+        "scripts/verify.ps1 green"
+      ],
+      "passes": false
+    }
+  ]
+}

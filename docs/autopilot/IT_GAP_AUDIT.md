@@ -95,6 +95,8 @@
 
 ## Suggested autopilot pack (self-assign)
 
+**Active:** `docs/autopilot/ai-attack-hardening/ai-attack-hardening.json` (from brainstorm `docs/plans/ai-attack-hardening-brainstorm.md`)
+
 Create `docs/autopilot/test-hardening/test-hardening.json` with requirements:
 
 1. Admin API test suite (`unban`, appeals, 503 disabled key)  
