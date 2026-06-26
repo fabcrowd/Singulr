@@ -8,7 +8,7 @@ import httpx
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from singulr.models import Ban
+from singulr.models import AppealRecord, Ban
 from singulr.services.reinstatement import BAN_STATUS_ACTIVE, BAN_STATUS_OVERTURNED
 
 
@@ -161,3 +161,50 @@ async def test_admin_unban_overturns_active_ban(
     assert body["ok"] is True
     assert body["ban_id"] == ban.id
     assert body["status"] == BAN_STATUS_OVERTURNED
+
+
+@pytest.mark.asyncio
+async def test_admin_appeals_list_requires_api_key(api_client: httpx.AsyncClient) -> None:
+    """GET /api/admin/appeals without key returns 401."""
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setenv("ADMIN_API_KEY", "secret-admin-key")
+        from singulr.config import get_settings
+
+        get_settings.cache_clear()
+        response = await api_client.get("/api/admin/appeals")
+
+    assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_admin_appeals_lists_records_with_valid_key(
+    api_client: httpx.AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """GET /api/admin/appeals with X-Admin-Key returns appeal list."""
+    db_session.add(
+        AppealRecord(
+            telegram_user_id=66001,
+            reason="false positive",
+            status="pending",
+        )
+    )
+    await db_session.commit()
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setenv("ADMIN_API_KEY", "secret-admin-key")
+        from singulr.config import get_settings
+
+        get_settings.cache_clear()
+        response = await api_client.get(
+            "/api/admin/appeals",
+            headers={"X-Admin-Key": "secret-admin-key"},
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert isinstance(body, list)
+    assert len(body) == 1
+    assert body[0]["telegram_user_id"] == 66001
+    assert body[0]["reason"] == "false positive"
+    assert body[0]["status"] == "pending"

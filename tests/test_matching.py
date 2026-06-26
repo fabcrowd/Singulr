@@ -2,18 +2,33 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from singulr.models import Ban, IPSession, Profile
+from singulr.models import Ban, IPSession, Profile, StylometryProfile
 from singulr.config import get_settings
 from singulr.services.channel_policy import EffectivePolicy
 from singulr.services.join_velocity import record_join_request, reset_join_velocity_tracker
 from singulr.services.keystroke import build_keystroke_profile, keystroke_similarity
 from singulr.services.matching import Decision, check_known_bad
+from singulr.services.stylometry import extract_features, merge_feature_vectors, stylometry_similarity
+
+_AUTHOR_A_MESSAGES = [
+    "lol yeah",
+    "nah idk",
+    "whatever man",
+    "yeah sure lol",
+]
+_MEDIUM_STYLO_MESSAGES = ["nah", "idk"]
+
+
+def _merged_stylometry(messages: list[str]) -> dict[str, float]:
+    """Build an averaged stylometry vector from sample messages."""
+    return merge_feature_vectors([extract_features(message) for message in messages])
 
 _SAMPLE_KEYSTROKES = [
     {"key": "W", "down": 0, "up": 80, "flight": 0},
@@ -266,6 +281,85 @@ async def test_pending_medium_keystroke_ban_evasion_on_new_user_id(db_session: A
     assert result.decision == Decision.PENDING
     assert result.decision != Decision.BLOCK
     assert any("keystroke_similarity" in factor for factor in result.risk_factors)
+
+
+@pytest.mark.asyncio
+async def test_blocks_high_stylometry_ban_evasion_on_new_user_id(db_session: AsyncSession) -> None:
+    """High stylometry similarity to a banned writer on a new user id auto-denies."""
+    fingerprint = "0x" + "s1" * 32
+    banned_vector = _merged_stylometry(_AUTHOR_A_MESSAGES)
+    evasion_vector = banned_vector
+    assert stylometry_similarity(banned_vector, evasion_vector) >= 0.92
+    db_session.add(
+        Ban(
+            telegram_user_id=8101,
+            fingerprint_hash=fingerprint,
+            stylometry_hash="0x" + "aa" * 32,
+            reason="banned",
+        )
+    )
+    db_session.add(
+        StylometryProfile(
+            telegram_user_id=8101,
+            feature_vector=banned_vector,
+            message_count=len(_AUTHOR_A_MESSAGES),
+        )
+    )
+    await db_session.commit()
+
+    result = await check_known_bad(
+        db_session,
+        _chain_mock(),
+        telegram_user_id=8102,
+        fingerprint_hash="0x" + "f2" * 32,
+        ip_hash=None,
+        stylometry_vector=evasion_vector,
+        policy=_DEFAULT_POLICY,
+    )
+
+    assert result.decision == Decision.BLOCK
+    assert any("stylometry_similarity" in factor for factor in result.risk_factors)
+
+
+@pytest.mark.asyncio
+async def test_pending_medium_stylometry_ban_evasion_on_new_user_id(db_session: AsyncSession) -> None:
+    """Medium stylometry similarity yields pending review, not auto-deny."""
+    fingerprint = "0x" + "s2" * 32
+    banned_vector = _merged_stylometry(_AUTHOR_A_MESSAGES)
+    evasion_vector = _merged_stylometry(_MEDIUM_STYLO_MESSAGES)
+    score = stylometry_similarity(banned_vector, evasion_vector)
+    policy = replace(_DEFAULT_POLICY, ban_evasion_auto_deny_threshold=0.95)
+    assert policy.local_similarity_flag_threshold <= score < policy.ban_evasion_auto_deny_threshold
+    db_session.add(
+        Ban(
+            telegram_user_id=8111,
+            fingerprint_hash=fingerprint,
+            stylometry_hash="0x" + "bb" * 32,
+            reason="banned",
+        )
+    )
+    db_session.add(
+        StylometryProfile(
+            telegram_user_id=8111,
+            feature_vector=banned_vector,
+            message_count=len(_AUTHOR_A_MESSAGES),
+        )
+    )
+    await db_session.commit()
+
+    result = await check_known_bad(
+        db_session,
+        _chain_mock(),
+        telegram_user_id=8112,
+        fingerprint_hash="0x" + "f3" * 32,
+        ip_hash=None,
+        stylometry_vector=evasion_vector,
+        policy=policy,
+    )
+
+    assert result.decision == Decision.PENDING
+    assert result.decision != Decision.BLOCK
+    assert any("stylometry_similarity" in factor for factor in result.risk_factors)
 
 
 @pytest.mark.asyncio
