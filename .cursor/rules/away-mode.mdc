@@ -33,11 +33,13 @@ Use the **Shell tool** background terminal with **`notify_on_output`**:
 ```powershell
 while ($true) {
   Start-Sleep -Seconds 1800
-  Write-Output 'AGENT_LOOP_TICK_REPO_LEAD {"prompt":"Away tick: senior-singulr-dev. autopilot status→next→TDD→verify.ps1→complete→next. Owner review table for questions; keep shipping. HANDOFF_SUMMARY at tick end."}'
+  Write-Output 'AGENT_LOOP_TICK_overnight {"prompt":"Overnight @it tick: read docs/autopilot/IT_LOOP_PROMPT.md TICK HANDLER. verify.ps1→IT_GAP_AUDIT highest open P0/P1/P2→TDD. No gaps: deep-bug-hunt+security-review+expand tests. autopilot status if eligible. HANDOFF_SUMMARY at tick end."}'
 }
 ```
 
-Track the shell task id so the owner can ask you to stop the loop.
+Also valid: `AGENT_LOOP_TICK_REPO_LEAD` with the same payload. Prefer **`.\scripts\overnight-loop.ps1 -IntervalMinutes 30`** (reads `tasks/overnight-it-tick-prompt.txt`).
+
+Track the shell task id so the owner can ask you to stop the loop (`.\scripts\stop-overnight-loop.ps1`).
 
 ## Forbidden (these caused false “it ran all day”)
 

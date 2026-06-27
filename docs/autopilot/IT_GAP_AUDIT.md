@@ -111,4 +111,14 @@ Create `docs/autopilot/test-hardening/test-hardening.json` with requirements:
 
 ## Loop directive update
 
-When all autopilot packs are complete, **do not idle on green verify**. Pick highest P0 item, TDD, `verify.ps1`, log in `*-notes.md`, repeat.
+When all autopilot packs are complete, **do not idle on green verify**.
+
+**Overnight loop:** `@it` runs via `scripts/overnight-loop.ps1` (Cursor-monitored, `AGENT_LOOP_TICK_overnight`). Full prompt: `docs/autopilot/IT_LOOP_PROMPT.md`.
+
+Each tick:
+1. Body-of-work review (`git log -20`, audit table vs code/tests)
+2. Highest open **P0 → P1 → P2** item — TDD, `verify.ps1`, mark **DONE**
+3. If no open gaps — `deep-bug-hunt`, `security-review`, expand handler/watcher/verify tests
+4. Prefer eligible autopilot req if one exists
+
+Pick highest P0 item, TDD, `verify.ps1`, log in `*-notes.md`, repeat.

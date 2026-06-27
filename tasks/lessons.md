@@ -48,4 +48,10 @@ Failures and patterns the agent must not repeat. Updated automatically on `orche
 - **Fix:** `_require_ops_admin()` on approve_, ban_, ban_cat_, ban_sev_ paths.
 - **Guard:** `tests/test_hardening.py::test_approve_callback_rejects_non_admin`
 
+### 2026-06-26 — overnight-loop — stale deep-harden prompt
+- **Symptom:** Overnight ticks fired but agent did no work; prompt still referenced deep-harden pack (5/5 done).
+- **Root cause:** Inline loop body never updated after autopilot packs completed; no IT gap audit directive.
+- **Fix:** `docs/autopilot/IT_LOOP_PROMPT.md`, `tasks/overnight-it-tick-prompt.txt`, foreground `scripts/overnight-loop.ps1` (Cursor-monitored); away-mode + REPO_LEAD TICK handler point at IT_GAP_AUDIT.
+- **Guard:** Re-arm with `.\scripts\overnight-loop.ps1`; stop old inline loop via `.\scripts\stop-overnight-loop.ps1` or kill stale shell.
+
 ---

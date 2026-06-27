@@ -91,7 +91,8 @@ Write-Host ""
 Write-Host "Runtime:      $activeRuntime (scripts\set-agent-runtime.ps1)" -ForegroundColor DarkGray
 Write-Host "Guide:        docs\AGENT_RUNTIME.md" -ForegroundColor DarkGray
 Write-Host "Handoff file: tasks\REPO_LEAD_HANDOFF.txt" -ForegroundColor DarkGray
-Write-Host "Stop loop:    ask Agent to stop AGENT_LOOP_TICK_REPO_LEAD shell (not github sync)" -ForegroundColor DarkGray
+Write-Host "Stop loop:    .\scripts\stop-overnight-loop.ps1 (overnight @it) or ask Agent to stop tick shell" -ForegroundColor DarkGray
+Write-Host "Overnight:    .\scripts\overnight-loop.ps1 -IntervalMinutes 30 + docs\autopilot\IT_LOOP_PROMPT.md" -ForegroundColor DarkGray
 Write-Host "Note:         Singulr GitHub Sync task only pushes git — it does not code." -ForegroundColor DarkYellow
 Write-Host ""
 

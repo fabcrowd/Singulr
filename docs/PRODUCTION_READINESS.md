@@ -36,9 +36,9 @@ Do **not** idle. In order:
 
 1. `python -m orchestrator autopilot status` on **active** pack
 2. If pack complete → `autopilot use` the **next incomplete** pack under `docs/autopilot/` (priority: `network-trust-registry` → `overnight-improve`)
-3. If all packs complete → **gap audit**: read active PRD (`network-trust-registry.md`) vs code; list missing user stories in `*-notes.md`
+3. If all packs complete → **IT gap audit**: `docs/autopilot/IT_GAP_AUDIT.md` — confirm open P0→P2 rows against code; mark DONE if shipped
 4. Pick the **highest-risk gap**; TDD + `verify.ps1`; log Lead decision
-5. Optional: `deep-bug-hunt`, `security-review`, expand tests for untested handlers
+5. No open IT gaps → `deep-bug-hunt`, `security-review`, expand tests (handlers, watcher, verify, admin API)
 
 ## Task pack priority
 

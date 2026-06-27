@@ -153,12 +153,18 @@ END WHILE
 - **Every research pass ends in tests or a Lead decision** — no research-only iterations
 - You may answer PRD-style questions yourself — record in notes, keep moving
 
-### TICK handler (`AGENT_LOOP_TICK_<slug>`)
+### TICK handler (`AGENT_LOOP_TICK_overnight` or `AGENT_LOOP_TICK_REPO_LEAD`)
 
-1. `python -m orchestrator autopilot status`
-2. If pending req → one full loop iteration above
-3. Else if verify not green → `grinding-until-pass` on `scripts\verify.ps1`
-4. Else → WebSearch one improvement for current PRD theme; implement smallest tested slice; or `deep-bug-hunt` on `git log -15`
+Read **`docs/autopilot/IT_LOOP_PROMPT.md`** TICK HANDLER (or JSON `prompt` on the tick line).
+
+1. `powershell -File scripts\verify.ps1` — grind until green
+2. **Body-of-work review:** `git log -20`, `git status`; scan `docs/autopilot/IT_GAP_AUDIT.md` — confirm open rows vs code/tests; mark **DONE** if already shipped
+3. Pick highest open **P0 → P1 → P2** gap → TDD → verify.ps1 → update audit table
+4. If no open IT gaps → `python -m orchestrator autopilot status`; if eligible req → autopilot iteration
+5. Else → `deep-bug-hunt` on `git log -15`; `security-review` on auth paths; expand handler/watcher/verify tests
+6. **HANDOFF_SUMMARY** at tick end
+
+Arm loop: `.\scripts\overnight-loop.ps1 -IntervalMinutes 30` (Cursor-monitored foreground; not Start-Job).
 
 ### Session complete (rare)
 

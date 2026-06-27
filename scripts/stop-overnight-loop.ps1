@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  Stop the overnight-improve background loop job.
+  Stop the Cursor-monitored overnight @it loop.
 #>
 $ErrorActionPreference = "Stop"
 $RepoRoot = Split-Path $PSScriptRoot -Parent
@@ -11,13 +11,24 @@ if (-not (Test-Path $PidFile)) {
     exit 0
 }
 
-$jobId = Get-Content $PidFile
+$stored = (Get-Content $PidFile -Raw).Trim()
 Remove-Item $PidFile -Force
-$job = Get-Job -Id $jobId -ErrorAction SilentlyContinue
+
+# Legacy Start-Job id (numeric, small)
+$job = Get-Job -Id $stored -ErrorAction SilentlyContinue
 if ($job) {
-    Stop-Job -Id $jobId -ErrorAction SilentlyContinue
-    Remove-Job -Id $jobId -Force -ErrorAction SilentlyContinue
-    Write-Host "Stopped overnight loop job $jobId."
-} else {
-    Write-Host "Job $jobId not found (already stopped)."
+    Stop-Job -Id $stored -ErrorAction SilentlyContinue
+    Remove-Job -Id $stored -Force -ErrorAction SilentlyContinue
+    Write-Host "Stopped overnight loop job $stored."
+    exit 0
 }
+
+# Foreground process PID (overnight-loop.ps1)
+$proc = Get-Process -Id $stored -ErrorAction SilentlyContinue
+if ($proc) {
+    Stop-Process -Id $stored -Force -ErrorAction SilentlyContinue
+    Write-Host "Stopped overnight loop process $stored."
+    exit 0
+}
+
+Write-Host "Overnight loop $stored not found (already stopped)."

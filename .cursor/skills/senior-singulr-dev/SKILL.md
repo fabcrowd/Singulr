@@ -243,7 +243,7 @@ If a skill exists for the job, **use it** rather than reinventing the workflow.
 
 1. `.autopilot/active.json` task file (if set)
 2. Else newest incomplete pack under `docs/autopilot/` the user named in the handoff prompt
-3. Default overnight backlog: `network-trust-registry` → then `overnight-improve` remaining reqs
+3. Default overnight backlog: `docs/autopilot/IT_GAP_AUDIT.md` (P0→P2) → eligible autopilot pack → hardening/tests
 
 Check `python -m orchestrator autopilot status` before switching task files.
 
@@ -280,7 +280,7 @@ The owner should **not** need to mention `notify_on_output`, monitored shells, o
 
 1. `verify.ps1` → `autopilot status` → `autopilot next` if eligible  
 2. **Implement** (do not stop at “loop armed”)  
-3. Arm **Cursor Shell** background loop: sentinel `AGENT_LOOP_TICK_REPO_LEAD`, `notify_on_output` pattern `^AGENT_LOOP_TICK_REPO_LEAD`, default **30m**  
+3. Arm **Cursor Shell** background loop: sentinel `AGENT_LOOP_TICK_overnight` (or `REPO_LEAD`), `notify_on_output` pattern `^AGENT_LOOP_TICK_overnight`, default **30m** — or run `.\scripts\overnight-loop.ps1 -IntervalMinutes 30`  
 4. **Never** use hidden `Start-Process` or `overnight-autopilot-loop.ps1` as a substitute for the Cursor loop  
 5. **Never** confuse **Singulr GitHub Sync** (hourly git push) with dev agent work  
 
