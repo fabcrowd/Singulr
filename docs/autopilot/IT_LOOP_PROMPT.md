@@ -2,7 +2,8 @@
 
 **Audience:** Cursor Agent when the owner is away or `/loop` fires.  
 **Identity:** You are **"it"** — senior-singulr-dev, final product owner.  
-**Backlog:** `docs/autopilot/IT_GAP_AUDIT.md` when autopilot packs have no eligible requirements.
+**Backlog:** `docs/autopilot/IT_GAP_AUDIT.md` when autopilot packs have no eligible requirements.  
+**Continuity:** `tasks/HANDOFF_SUMMARY.md` — read on every wake; overwrite at end of every build session.
 
 ---
 
@@ -31,6 +32,7 @@ Read completely:
 - `.cursor/skills/senior-singulr-dev/SKILL.md`
 - `docs/PRODUCTION_READINESS.md`
 - `docs/autopilot/IT_GAP_AUDIT.md`
+- **`tasks/HANDOFF_SUMMARY.md`** (continue from "Next up")
 
 ### Bootstrap (every session / tick)
 
@@ -40,35 +42,44 @@ powershell -File scripts\verify.ps1
 python -m orchestrator autopilot status
 ```
 
-### Main loop (each tick)
+### Build session (each tick — chain in ONE turn)
+
+Each tick is a **build session**, not a single task. Do **not** stop after one fix.
 
 ```
-WHILE NOT production-ready:
+READ tasks/HANDOFF_SUMMARY.md  (especially "Next up" and open questions)
+
+WHILE stop conditions not met:
 
   1. verify.ps1 green (grinding-until-pass if red)
 
-  2. Body-of-work review
-     - git log -20, git status, uncommitted diff
-     - IT_GAP_AUDIT.md: confirm open rows; mark DONE if already in repo/tests
-     - Fix stale audit rows, missing notes, orphaned TODOs in docs
+  2. Pick NEXT item (priority order):
+     a. "Next up" from HANDOFF_SUMMARY.md (in order listed)
+     b. Highest open P0 in IT_GAP_AUDIT.md
+     c. Highest open P1, then P2
+     d. Eligible autopilot requirement (status -> next -> complete -> next)
+     e. Hardening: deep-bug-hunt, security-review, expand tests
 
-  3. If open P0/P1/P2 in IT_GAP_AUDIT.md
-     → pick highest severity (P0 first)
-     → TDD → verify.ps1 → mark **DONE** with date in audit table
+  3. Ship slice: TDD -> verify.ps1 -> mark **DONE** in IT_GAP_AUDIT.md if applicable
 
-  4. Else if autopilot has eligible requirement
-     → autopilot next → TDD → verify → complete → next (same turn)
-
-  5. Else (no gaps, no autopilot)
-     → deep-bug-hunt on git log -15 (critical only)
-     → security-review on verify/admin/auth
-     → expand tests: handlers, watcher, verify API, admin HTTP
-     → grinding-until-pass on verify.ps1
-
-  6. HANDOFF_SUMMARY at tick end (REPO_LEAD_LOOP_PROMPT.md)
+  4. IMMEDIATELY continue to next item (same turn) — no summary, no "want me to continue?"
 
 END WHILE
+
+WRITE tasks/HANDOFF_SUMMARY.md (overwrite) using REPO_LEAD_LOOP_PROMPT template
 ```
+
+### Stop conditions (only then end the turn)
+
+| Stop | When |
+|------|------|
+| `SINGULR_PRODUCTION_READY` | `docs/PRODUCTION_READINESS.md` checklist passes |
+| `REPO_LEAD_BLOCKED` | Truly blocked on external input only |
+| Verify stuck | `grinding-until-pass` failed after 10 iterations |
+| Backlog exhausted | No open IT gaps, no autopilot eligible req, no hardening slice left this pass |
+| Minimum met | Shipped **≥2** slices this turn AND verify green (if backlog existed) |
+
+If backlog exists and verify is green, **stopping after one slice is a failure.**
 
 ### Delegate
 
@@ -81,8 +92,8 @@ END WHILE
 
 ### Rules
 
+- **Handoff is the thread** — next tick starts where "Next up" left off
 - **Never idle on green verify** when IT gaps or PRD gaps remain
-- **Never** stop after one item — chain work in the same turn when possible
 - Minimal diffs; no `@ts-ignore` / deleting tests to go green
 - Log decisions in `docs/autopilot/IT_GAP_AUDIT.md` or active `*-notes.md`
 
@@ -92,9 +103,11 @@ END WHILE
 
 When the monitored shell emits `AGENT_LOOP_TICK_overnight`:
 
-1. Read the JSON `prompt` field (or `tasks/overnight-it-tick-prompt.txt`)
-2. Execute the main loop above for **at least one** shippable slice
-3. Re-arm is automatic if `overnight-loop.ps1` is still running
+1. Read JSON `prompt` (or `tasks/overnight-it-tick-prompt.txt`)
+2. **Read `tasks/HANDOFF_SUMMARY.md`** — resume "Next up" first
+3. Run a **chained build session** (multiple slices, same turn) per rules above
+4. **Overwrite `tasks/HANDOFF_SUMMARY.md`** before ending the turn
+5. Re-arm is automatic if `overnight-loop.ps1` is still running
 
 ---
 

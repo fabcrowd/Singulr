@@ -17,7 +17,7 @@ The owner expects: **code keeps shipping** until `SINGULR_PRODUCTION_READY` or `
 2. `powershell -File scripts\verify.ps1` → `python -m orchestrator autopilot status` → `autopilot next` if eligible.
 3. **Ship work** — at least one full autopilot iteration (TDD → verify → complete → next) before ending the turn if any req is eligible.
 4. **Arm the real Cursor loop** (see below). Confirm in one sentence what interval you used and that coding runs on ticks.
-5. On tick end / blocked / production-ready: post **HANDOFF_SUMMARY** per `docs/autopilot/REPO_LEAD_LOOP_PROMPT.md`.
+5. On tick end / blocked / production-ready: write **`tasks/HANDOFF_SUMMARY.md`** per `docs/autopilot/REPO_LEAD_LOOP_PROMPT.md`.
 
 ## Arm loop (Cursor only — non-negotiable)
 
@@ -33,7 +33,7 @@ Use the **Shell tool** background terminal with **`notify_on_output`**:
 ```powershell
 while ($true) {
   Start-Sleep -Seconds 1800
-  Write-Output 'AGENT_LOOP_TICK_overnight {"prompt":"Overnight @it tick: read docs/autopilot/IT_LOOP_PROMPT.md TICK HANDLER. verify.ps1→IT_GAP_AUDIT highest open P0/P1/P2→TDD. No gaps: deep-bug-hunt+security-review+expand tests. autopilot status if eligible. HANDOFF_SUMMARY at tick end."}'
+  Write-Output 'AGENT_LOOP_TICK_overnight {"prompt":"@it BUILD SESSION: read tasks/HANDOFF_SUMMARY.md first. Chain multiple slices same turn (see IT_LOOP_PROMPT.md). verify.ps1->ship->verify->next slice. Min 2 if backlog. Overwrite HANDOFF_SUMMARY at end."}'
 }
 ```
 

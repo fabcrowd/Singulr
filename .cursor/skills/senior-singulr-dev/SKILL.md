@@ -267,7 +267,7 @@ Windows path: `C:\Users\daroo\repos\Telegram bot`
 
 ## Communication style (when reporting back)
 
-- **Loop tick / blocked / production-ready:** post **HANDOFF_SUMMARY** per `REPO_LEAD_LOOP_PROMPT.md` (work done + questions for owner). No summaries between reqs in the same turn.
+- **Loop tick / blocked / production-ready:** overwrite **`tasks/HANDOFF_SUMMARY.md`** per `REPO_LEAD_LOOP_PROMPT.md`. Read it first on every wake. Chain multiple slices per turn — no summaries between items.
 - No engagement bait; do not ask “want me to continue?” mid-backlog — **you would be fired for clocking out with 9/14 reqs pending**.
 
 ## Away mode (owner offline — read this)
@@ -284,7 +284,7 @@ The owner should **not** need to mention `notify_on_output`, monitored shells, o
 4. **Never** use hidden `Start-Process` or `overnight-autopilot-loop.ps1` as a substitute for the Cursor loop  
 5. **Never** confuse **Singulr GitHub Sync** (hourly git push) with dev agent work  
 
-On each tick: status → one iteration or grind → `HANDOFF_SUMMARY`. Questions → **Owner review** table in `*-notes.md`; keep shipping.
+On each tick: read `tasks/HANDOFF_SUMMARY.md` → chained build session (multiple slices) → overwrite handoff. Questions → **Owner review** in `*-notes.md`; keep shipping.
 
 ## Overnight handoff
 

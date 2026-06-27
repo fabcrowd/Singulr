@@ -50,7 +50,9 @@ Optional: `.\scripts\start-repo-lead.ps1 -TaskSlug network-trust-registry -LoopM
 
 ## HANDOFF_SUMMARY (agent → owner)
 
-Post this when finishing a **loop tick**, when **blocked** (`REPO_LEAD_BLOCKED`), or when **production-ready** (`SINGULR_PRODUCTION_READY`). Do **not** post between every autopilot requirement (keep working in the same turn).
+**Persist to `tasks/HANDOFF_SUMMARY.md`** (overwrite each build session). The next tick **must read this file first** and continue from **Next up**.
+
+Post when finishing a **loop tick / build session**, when **blocked** (`REPO_LEAD_BLOCKED`), or when **production-ready** (`SINGULR_PRODUCTION_READY`). Do **not** post between items within the same chained turn.
 
 ```markdown
 ## HANDOFF_SUMMARY (YYYY-MM-DD HH:MM)
@@ -72,6 +74,8 @@ Post this when finishing a **loop tick**, when **blocked** (`REPO_LEAD_BLOCKED`)
 ### Next up (agent will continue without waiting)
 - …
 ```
+
+File path: **`tasks/HANDOFF_SUMMARY.md`**
 
 ---
 
@@ -157,12 +161,11 @@ END WHILE
 
 Read **`docs/autopilot/IT_LOOP_PROMPT.md`** TICK HANDLER (or JSON `prompt` on the tick line).
 
-1. `powershell -File scripts\verify.ps1` — grind until green
-2. **Body-of-work review:** `git log -20`, `git status`; scan `docs/autopilot/IT_GAP_AUDIT.md` — confirm open rows vs code/tests; mark **DONE** if already shipped
-3. Pick highest open **P0 → P1 → P2** gap → TDD → verify.ps1 → update audit table
-4. If no open IT gaps → `python -m orchestrator autopilot status`; if eligible req → autopilot iteration
-5. Else → `deep-bug-hunt` on `git log -15`; `security-review` on auth paths; expand handler/watcher/verify tests
-6. **HANDOFF_SUMMARY** at tick end
+1. **Read `tasks/HANDOFF_SUMMARY.md`** — continue "Next up" first
+2. `powershell -File scripts\verify.ps1` — grind until green
+3. **Chained build session (same turn):** ship multiple slices — handoff next up → IT_GAP P0→P1→P2 → autopilot eligible → hardening/tests. Do not stop after one item when backlog exists.
+4. **Overwrite `tasks/HANDOFF_SUMMARY.md`** with shipped work + concrete "Next up"
+5. Stop only per IT_LOOP_PROMPT stop conditions (`SINGULR_PRODUCTION_READY`, `REPO_LEAD_BLOCKED`, verify stuck, backlog exhausted, or ≥2 slices shipped)
 
 Arm loop: `.\scripts\overnight-loop.ps1 -IntervalMinutes 30` (Cursor-monitored foreground; not Start-Job).
 

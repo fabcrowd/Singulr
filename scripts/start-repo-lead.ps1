@@ -58,7 +58,7 @@ $common = (
     "Human walked away - ship until SINGULR_PRODUCTION_READY or REPO_LEAD_BLOCKED. " +
     "Bootstrap: autopilot status, next, TDD, verify.ps1, verify, complete, next (same turn). " +
     "No autopilot task? Self-assign per PRODUCTION_READINESS.md. " +
-    "After each session chunk, when blocked, or production-ready: HANDOFF_SUMMARY " +
+    "After each build session, when blocked, or production-ready: overwrite tasks/HANDOFF_SUMMARY.md " +
     "(work done, verify status, decisions, questions for owner). " +
     "No questions mid-iteration unless blocked."
 )

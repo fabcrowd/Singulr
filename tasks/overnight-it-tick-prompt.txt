@@ -1,12 +1,14 @@
-Overnight @it tick. Do not ask the user to continue.
+Overnight @it BUILD SESSION. Do not ask the user to continue. Chain multiple items in THIS turn.
 
-You are "it" (senior-singulr-dev). Read .cursor/skills/senior-singulr-dev/SKILL.md and docs/autopilot/IT_LOOP_PROMPT.md TICK HANDLER.
+You are "it" (senior-singulr-dev). Read docs/autopilot/IT_LOOP_PROMPT.md TICK HANDLER fully.
 
-1) cd repo; powershell -File scripts\verify.ps1 - fix any failure first (grinding-until-pass)
-2) Body-of-work review: git log -20 --oneline; git status; scan docs/autopilot/IT_GAP_AUDIT.md for open P0->P1->P2 items - confirm each row against code/tests (mark **DONE** if already shipped)
-3) Pick highest-risk open gap or loose end; TDD minimal fix + regression test; verify.ps1 green; update IT_GAP_AUDIT.md row
-4) If no open IT gaps: deep-bug-hunt on git log -15 (critical only); security-review on verify/admin/auth paths; expand tests on handlers, watcher, verify API
-5) python -m orchestrator autopilot status - if an eligible autopilot req exists, prefer it over new scope
-6) Post HANDOFF_SUMMARY per docs/autopilot/REPO_LEAD_LOOP_PROMPT.md at tick end
+START: Read tasks/HANDOFF_SUMMARY.md first (especially "Next up") - continue that work before picking new scope.
 
-Keep verify.ps1 green every tick. No research-only iterations.
+Then loop in the same turn until stop conditions in IT_LOOP_PROMPT.md:
+  verify.ps1 green -> ship slice (handoff next up, then IT_GAP P0->P1->P2, then autopilot eligible, then hardening/tests) -> verify.ps1 -> update audit/handoff -> NEXT slice immediately.
+
+Do NOT stop after one item. Minimum 2 shippable slices per tick when backlog exists and verify stays green.
+
+END: Overwrite tasks/HANDOFF_SUMMARY.md (template in docs/autopilot/REPO_LEAD_LOOP_PROMPT.md). Include concrete "Next up" for the next tick.
+
+Keep verify.ps1 green. No research-only iterations.

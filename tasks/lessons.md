@@ -54,4 +54,9 @@ Failures and patterns the agent must not repeat. Updated automatically on `orche
 - **Fix:** `docs/autopilot/IT_LOOP_PROMPT.md`, `tasks/overnight-it-tick-prompt.txt`, foreground `scripts/overnight-loop.ps1` (Cursor-monitored); away-mode + REPO_LEAD TICK handler point at IT_GAP_AUDIT.
 - **Guard:** Re-arm with `.\scripts\overnight-loop.ps1`; stop old inline loop via `.\scripts\stop-overnight-loop.ps1` or kill stale shell.
 
+### 2026-06-27 — overnight-loop — handoff continuity + chained turns
+- **Symptom:** Ticks woke agent but work did not chain; no memory between ticks.
+- **Fix:** `tasks/HANDOFF_SUMMARY.md` read on wake, overwritten on sleep; tick prompt requires ≥2 slices per turn when backlog exists.
+- **Guard:** IT_LOOP_PROMPT.md build session rules; REPO_LEAD points at handoff file.
+
 ---
