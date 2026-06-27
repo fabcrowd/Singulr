@@ -1,6 +1,6 @@
-<#
+﻿<#
 .SYNOPSIS
-  Cursor-monitored @it overnight loop — wakes Agent on an interval.
+  Cursor-monitored @it overnight loop - wakes Agent on an interval.
 
 .DESCRIPTION
   Emits AGENT_LOOP_TICK_overnight with a JSON payload each interval.
@@ -45,7 +45,12 @@ function Get-TickPayload {
 function Write-OvernightTick {
     $payload = Get-TickPayload
     $line = "$(Get-Date -Format o) AGENT_LOOP_TICK_overnight $payload"
-    Add-Content -Path $LogFile -Value $line
+    try {
+        New-Item -ItemType Directory -Force -Path (Split-Path $LogFile) | Out-Null
+        Add-Content -Path $LogFile -Value $line -ErrorAction Stop
+    } catch {
+        Write-Warning "Could not write tick log ($LogFile): $($_.Exception.Message)"
+    }
     Write-Output "AGENT_LOOP_TICK_overnight $payload"
 }
 
@@ -62,7 +67,7 @@ Write-Host "  Handoff:   tasks\HANDOFF_SUMMARY.md (read on wake, overwrite on sl
 Write-Host "  Log:       $LogFile"
 Write-Host "  Stop:      .\scripts\stop-overnight-loop.ps1"
 Write-Host ""
-Write-Host "Paste LOOP PROMPT from docs\autopilot\IT_LOOP_PROMPT.md into Agent now."
+Write-Host "Paste LOOP PROMPT from docs/autopilot/IT_LOOP_PROMPT.md into Agent now."
 
 if ($RunOnce) {
     Write-OvernightTick

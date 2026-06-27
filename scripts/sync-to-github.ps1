@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
   Commit and push local repo changes to GitHub when there is work to sync.
 
@@ -24,8 +24,12 @@ $LogFile = Join-Path $RepoRoot ".autopilot\github-sync.log"
 function Write-SyncLog {
     param([string]$Message)
     $line = "$(Get-Date -Format o) $Message"
-    New-Item -ItemType Directory -Force -Path (Split-Path $LogFile) | Out-Null
-    Add-Content -Path $LogFile -Value $line
+    try {
+        New-Item -ItemType Directory -Force -Path (Split-Path $LogFile) | Out-Null
+        Add-Content -Path $LogFile -Value $line -ErrorAction Stop
+    } catch {
+        Write-Warning "Could not write sync log ($LogFile): $($_.Exception.Message)"
+    }
     Write-Host $line
 }
 

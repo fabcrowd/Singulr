@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
   Stop the Cursor-monitored overnight @it loop.
 #>
@@ -14,7 +14,6 @@ if (-not (Test-Path $PidFile)) {
 $stored = (Get-Content $PidFile -Raw).Trim()
 Remove-Item $PidFile -Force
 
-# Legacy Start-Job id (numeric, small)
 $job = Get-Job -Id $stored -ErrorAction SilentlyContinue
 if ($job) {
     Stop-Job -Id $stored -ErrorAction SilentlyContinue
@@ -23,7 +22,6 @@ if ($job) {
     exit 0
 }
 
-# Foreground process PID (overnight-loop.ps1)
 $proc = Get-Process -Id $stored -ErrorAction SilentlyContinue
 if ($proc) {
     Stop-Process -Id $stored -Force -ErrorAction SilentlyContinue
