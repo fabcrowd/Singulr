@@ -2,6 +2,53 @@
 
 Telegram community verification that stops banned users from rejoining on new accounts — by fingerprinting their device, analyzing how they type, and building a writing-style profile over time. Ban records can be mirrored to **Adiri testnet** (Telcoin) for a tamper-proof shared blacklist.
 
+
+## Project status
+
+**Last updated:** 2026-06-27 · **Branch:** `master` / `main` (in sync)
+
+| | |
+|---|---|
+| **Stage** | Pre-production — core MVP flows work; deployment prep in progress |
+| **Verify gate** | `scripts/verify.ps1` — pytest, ruff, Hardhat compile + contract tests (green on last run) |
+| **Production bar** | **Not** `SINGULR_PRODUCTION_READY` — security depth, gap coverage, and deploy checklist items 6–8 still open ([details](docs/PRODUCTION_READINESS.md)) |
+
+### Recently shipped
+
+- **P0-1** — Security wizard re-checks `is_channel_admin()` on every callback step
+- **P1-8** — Chain RPC fail-closed → verification `PENDING` + ops alert when Adiri is configured but unavailable
+- **@it overnight loop** — `scripts/overnight-loop.ps1` + [IT gap audit playbook](docs/autopilot/IT_LOOP_PROMPT.md)
+
+### Open todos (priority order)
+
+Full backlog: **[docs/autopilot/IT_GAP_AUDIT.md](docs/autopilot/IT_GAP_AUDIT.md)** · Agent handoff: **[tasks/HANDOFF_SUMMARY.md](tasks/HANDOFF_SUMMARY.md)**
+
+#### P0 — security + untested critical paths (do first)
+
+| ID | Status | Task |
+|----|--------|------|
+| P0-1 | Done | Wizard admin re-check on all callback steps |
+| P0-2 | **Open** | Precheck per-token rate limit (`api/verify.py`) |
+| P0-3 | **Open** | Trust `X-Forwarded-For` only from configured proxy IPs |
+| P0-4 | **Open** | HTTP tests for `POST /api/admin/unban` |
+| P0-5 | **Open** | Table-driven tests for `verify_ban` taxonomy |
+| P0-6 | **Open** | Test `details_` admin callback end-to-end |
+| P0-7 | **Open** | Test 503 when `ADMIN_API_KEY` unset |
+| P0-8 | **Open** | Test watcher message log / stylometry ingestion |
+
+#### P1 — hardening (selected)
+
+| ID | Status | Task |
+|----|--------|------|
+| P1-5 | **Open** | Hardhat `BanRegistry` tests in CI / verify gate |
+| P1-8 | Done | Blockchain fail-closed on RPC errors |
+| P1-9 | **Open** | Redis/shared rate limiter for multi-worker deploy |
+
+*10 more P1 items and 10 P2 coverage items — see [IT gap audit](docs/autopilot/IT_GAP_AUDIT.md).*
+
+### Deploy
+
+Production Docker Compose steps: **[docs/DEPLOY.md](docs/DEPLOY.md)**. Set secrets via `.env` at runtime (never commit).
 ## Two core functions
 
 1. **The Gate** — On join, the bot restricts the user, DMs a verification link, and runs fingerprint + keystroke checks against banned records.
