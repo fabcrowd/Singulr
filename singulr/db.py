@@ -39,6 +39,9 @@ async def _apply_schema_patches(conn) -> None:
     dialect = conn.dialect.name
     if dialect == "postgresql":
         statements = [
+            # profiles: drop old single-user unique constraint, add per-device unique index
+            "ALTER TABLE profiles DROP CONSTRAINT IF EXISTS profiles_telegram_user_id_key",
+            "CREATE UNIQUE INDEX IF NOT EXISTS uq_profiles_user_device ON profiles(telegram_user_id, device_type)",
             "ALTER TABLE bans ADD COLUMN IF NOT EXISTS chain_ban_index INTEGER DEFAULT 0",
             "ALTER TABLE bans ADD COLUMN IF NOT EXISTS status VARCHAR(16) DEFAULT 'active'",
             "ALTER TABLE bans ADD COLUMN IF NOT EXISTS overturned_at TIMESTAMPTZ",

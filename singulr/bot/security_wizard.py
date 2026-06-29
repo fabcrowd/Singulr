@@ -152,10 +152,11 @@ def _instant_ban_keyboard(selected: set[str]) -> InlineKeyboardMarkup:
     rows: list[list[InlineKeyboardButton]] = []
     for category in instant_choices:
         mark = "✓ " if category.value in selected else ""
+        label = category.value.replace("_", " ").title()
         rows.append(
             [
                 InlineKeyboardButton(
-                    f"{mark}{category.value}",
+                    f"{mark}{label}",
                     callback_data=f"sec_ib_{category.value}",
                 )
             ]
@@ -171,8 +172,8 @@ def _instant_ban_keyboard(selected: set[str]) -> InlineKeyboardMarkup:
 
 def _social_keyboard(*, profiling: bool, external: bool) -> InlineKeyboardMarkup:
     """Toggle social profiling and external API."""
-    prof_label = "Profiling: ON" if profiling else "Profiling: OFF"
-    ext_label = "External API: ON" if external else "External API: OFF"
+    prof_label = "Account & social checks: ON" if profiling else "Account & social checks: OFF"
+    ext_label = "External risk database: ON" if external else "External risk database: OFF"
     return InlineKeyboardMarkup(
         [
             [InlineKeyboardButton(prof_label, callback_data="sec_soc_toggle_prof")],
@@ -198,10 +199,11 @@ def _categories_keyboard(selected: set[str]) -> InlineKeyboardMarkup:
     rows: list[list[InlineKeyboardButton]] = []
     for category in BanCategory:
         mark = "✓ " if category.value in selected else ""
+        label = category.value.replace("_", " ").title()
         rows.append(
             [
                 InlineKeyboardButton(
-                    f"{mark}{category.value}",
+                    f"{mark}{label}",
                     callback_data=f"sec_cat_{category.value}",
                 )
             ]
@@ -342,7 +344,7 @@ async def security_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         return WizardState.DELTA
 
     await update.message.reply_text(
-        "Security setup (question 1 of 5)\nChoose a preset:",
+        f"Security setup (question 1 of {WIZARD_TOTAL_QUESTIONS})\nChoose a security preset:",
         reply_markup=_preset_keyboard(),
     )
     return WizardState.PRESET
@@ -360,7 +362,7 @@ async def delta_selected(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     channel_id = int(context.user_data[WIZARD_CHANNEL_KEY])
     if query.data == "sec_delta_full":
         await query.edit_message_text(
-            "Security setup (question 1 of 5)\nChoose a preset:",
+            f"Security setup (question 1 of {WIZARD_TOTAL_QUESTIONS})\nChoose a security preset:",
             reply_markup=_preset_keyboard(),
         )
         return WizardState.PRESET
@@ -369,7 +371,7 @@ async def delta_selected(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         existing = await session.get(ChannelSecuritySettings, channel_id)
     if existing is None:
         await query.edit_message_text(
-            "Security setup (question 1 of 5)\nChoose a preset:",
+            f"Security setup (question 1 of {WIZARD_TOTAL_QUESTIONS})\nChoose a security preset:",
             reply_markup=_preset_keyboard(),
         )
         return WizardState.PRESET
@@ -399,14 +401,14 @@ async def delta_selected(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     if existing.wizard_version >= 3:
         await query.edit_message_text(
             f"Security setup (question 8 of {WIZARD_TOTAL_QUESTIONS})\n"
-            "How should automation signals (webdriver, synthetic typing) be handled?",
+            "What should happen when a bot or automated browser is detected?",
             reply_markup=_automation_keyboard(),
         )
         return WizardState.AUTOMATION
 
     await query.edit_message_text(
         f"Security setup (question 6 of {WIZARD_TOTAL_QUESTIONS})\n"
-        "Tap categories for instant ban on verify (toggle on/off), then Done:",
+        "Which violation types should trigger an instant ban at verification? (tap to toggle, then Done)",
         reply_markup=_instant_ban_keyboard(
             set(existing.instant_ban_categories or DEFAULT_INSTANT_BAN_CATEGORIES)
         ),
@@ -438,7 +440,8 @@ async def preset_selected(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     preset = query.data.removeprefix("sec_preset_")
     context.user_data[WIZARD_PRESET_KEY] = preset
     await query.edit_message_text(
-        "Security setup (question 2 of 5)\nBan evasion strictness:",
+        f"Security setup (question 2 of {WIZARD_TOTAL_QUESTIONS})\n"
+        "How strictly should we catch ban evasion?",
         reply_markup=_evasion_keyboard(),
     )
     return WizardState.EVASION
@@ -455,7 +458,8 @@ async def evasion_selected(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     evasion = query.data.removeprefix("sec_evasion_")
     context.user_data[WIZARD_EVASION_KEY] = evasion
     await query.edit_message_text(
-        "Security setup (question 3 of 5)\nWhere should pending reviews be sent?",
+        f"Security setup (question 3 of {WIZARD_TOTAL_QUESTIONS})\n"
+        "Where should pending reviews and alerts be sent?",
         reply_markup=_ops_keyboard(),
     )
     return WizardState.OPS_CHAT
@@ -477,7 +481,8 @@ async def ops_selected(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     context.user_data[WIZARD_OPS_KEY] = ops_chat_id
 
     await query.edit_message_text(
-        "Security setup (question 4 of 5)\nNetwork registry participation:",
+        f"Security setup (question 4 of {WIZARD_TOTAL_QUESTIONS})\n"
+        "Share ban data with the Singulr network?",
         reply_markup=_network_mode_keyboard(),
     )
     return WizardState.NETWORK_MODE
@@ -495,8 +500,8 @@ async def network_mode_selected(update: Update, context: ContextTypes.DEFAULT_TY
     context.user_data[WIZARD_NETWORK_MODE_KEY] = mode
     context.user_data[WIZARD_NET_CATEGORIES_KEY] = set(DEFAULT_NETWORK_AUTO_REJECT)
     await query.edit_message_text(
-        "Security setup (question 5 of 5)\n"
-        "Tap categories to auto-reject from the network (toggle on/off), then Done:",
+        f"Security setup (question 5 of {WIZARD_TOTAL_QUESTIONS})\n"
+        "Which violation types should be auto-rejected from the network? (tap to toggle, then Done)",
         reply_markup=_categories_keyboard(set(DEFAULT_NETWORK_AUTO_REJECT)),
     )
     return WizardState.NETWORK_CATEGORIES
@@ -519,8 +524,8 @@ async def network_categories_selected(
         selected = set(DEFAULT_NETWORK_AUTO_REJECT)
         context.user_data[WIZARD_NET_CATEGORIES_KEY] = selected
         await query.edit_message_text(
-            "Security setup (question 5 of 5)\n"
-            "Tap categories to auto-reject from the network (toggle on/off), then Done:",
+            f"Security setup (question 5 of {WIZARD_TOTAL_QUESTIONS})\n"
+            "Which violation types should be auto-rejected from the network? (tap to toggle, then Done)",
             reply_markup=_categories_keyboard(selected),
         )
         return WizardState.NETWORK_CATEGORIES
@@ -532,7 +537,7 @@ async def network_categories_selected(
         context.user_data[WIZARD_INSTANT_BAN_KEY] = set(DEFAULT_INSTANT_BAN_CATEGORIES)
         await query.edit_message_text(
             f"Security setup (question 6 of {WIZARD_TOTAL_QUESTIONS})\n"
-            "Tap categories for instant ban on verify (toggle on/off), then Done:",
+            "Which violation types trigger an instant ban at verification? (tap to toggle, then Done)",
             reply_markup=_instant_ban_keyboard(set(DEFAULT_INSTANT_BAN_CATEGORIES)),
         )
         return WizardState.INSTANT_BAN
@@ -544,8 +549,8 @@ async def network_categories_selected(
         selected.add(category)
     context.user_data[WIZARD_NET_CATEGORIES_KEY] = selected
     await query.edit_message_text(
-        "Security setup (question 5 of 5)\n"
-        "Tap categories to auto-reject from the network (toggle on/off), then Done:",
+        f"Security setup (question 5 of {WIZARD_TOTAL_QUESTIONS})\n"
+        "Which violation types should be auto-rejected from the network? (tap to toggle, then Done)",
         reply_markup=_categories_keyboard(selected),
     )
     return WizardState.NETWORK_CATEGORIES
@@ -567,7 +572,7 @@ async def instant_ban_selected(update: Update, context: ContextTypes.DEFAULT_TYP
         context.user_data[WIZARD_INSTANT_BAN_KEY] = selected
         await query.edit_message_text(
             f"Security setup (question 6 of {WIZARD_TOTAL_QUESTIONS})\n"
-            "Tap categories for instant ban on verify (toggle on/off), then Done:",
+            "Which violation types should trigger an instant ban at verification? (tap to toggle, then Done)",
             reply_markup=_instant_ban_keyboard(selected),
         )
         return WizardState.INSTANT_BAN
@@ -582,7 +587,7 @@ async def instant_ban_selected(update: Update, context: ContextTypes.DEFAULT_TYP
         external = bool(context.user_data[WIZARD_SOCIAL_EXTERNAL_KEY])
         await query.edit_message_text(
             f"Security setup (question 7 of {WIZARD_TOTAL_QUESTIONS})\n"
-            "Social profiling toggles:",
+            "Enable account history and social profile checks?",
             reply_markup=_social_keyboard(profiling=profiling, external=external),
         )
         return WizardState.SOCIAL
@@ -595,7 +600,7 @@ async def instant_ban_selected(update: Update, context: ContextTypes.DEFAULT_TYP
     context.user_data[WIZARD_INSTANT_BAN_KEY] = selected
     await query.edit_message_text(
         f"Security setup (question 6 of {WIZARD_TOTAL_QUESTIONS})\n"
-        "Tap categories for instant ban on verify (toggle on/off), then Done:",
+        "Which violation types should trigger an instant ban at verification? (tap to toggle, then Done)",
         reply_markup=_instant_ban_keyboard(selected),
     )
     return WizardState.INSTANT_BAN
@@ -618,7 +623,7 @@ async def social_selected(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         profiling = not profiling
         await query.edit_message_text(
             f"Security setup (question 7 of {WIZARD_TOTAL_QUESTIONS})\n"
-            "Social profiling toggles:",
+            "Enable account history and social profile checks?",
             reply_markup=_social_keyboard(profiling=profiling, external=external),
         )
         return WizardState.SOCIAL
@@ -628,14 +633,14 @@ async def social_selected(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         external = not external
         await query.edit_message_text(
             f"Security setup (question 7 of {WIZARD_TOTAL_QUESTIONS})\n"
-            "Social profiling toggles:",
+            "Enable account history and social profile checks?",
             reply_markup=_social_keyboard(profiling=profiling, external=external),
         )
         return WizardState.SOCIAL
 
     await query.edit_message_text(
         f"Security setup (question 8 of {WIZARD_TOTAL_QUESTIONS})\n"
-        "How should automation signals (webdriver, synthetic typing) be handled?",
+        "What should happen when a bot or automated browser is detected?",
         reply_markup=_automation_keyboard(),
     )
     return WizardState.AUTOMATION
@@ -680,7 +685,7 @@ async def confirm_selected(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         _clear_wizard_user_data(context)
         context.user_data[WIZARD_CHANNEL_KEY] = channel_id
         await query.edit_message_text(
-            "Security setup (question 1 of 5)\nChoose a preset:",
+            f"Security setup (question 1 of {WIZARD_TOTAL_QUESTIONS})\nChoose a security preset:",
             reply_markup=_preset_keyboard(),
         )
         return WizardState.PRESET

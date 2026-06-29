@@ -5,7 +5,7 @@ Telegram community verification that stops banned users from rejoining on new ac
 
 ## Project status
 
-**Last updated:** 2026-06-27 · **Branch:** `master` / `main` (in sync)
+**Last updated:** 2026-06-27 (handoff refresh) · **Branch:** `master` / `main` (in sync with GitHub)
 
 | | |
 |---|---|
@@ -15,6 +15,7 @@ Telegram community verification that stops banned users from rejoining on new ac
 
 ### Recently shipped
 
+- **ai-attack-hardening** (10/10) — verify session binding, precheck rate limits, proxy trust, automation/keystroke signals, join burst → matching + ops logging
 - **P0-1** — Security wizard re-checks `is_channel_admin()` on every callback step
 - **P1-8** — Chain RPC fail-closed → verification `PENDING` + ops alert when Adiri is configured but unavailable
 - **@it overnight loop** — `scripts/overnight-loop.ps1` + [IT gap audit playbook](docs/autopilot/IT_LOOP_PROMPT.md)
@@ -28,13 +29,13 @@ Full backlog: **[docs/autopilot/IT_GAP_AUDIT.md](docs/autopilot/IT_GAP_AUDIT.md)
 | ID | Status | Task |
 |----|--------|------|
 | P0-1 | Done | Wizard admin re-check on all callback steps |
-| P0-2 | **Open** | Precheck per-token rate limit (`api/verify.py`) |
-| P0-3 | **Open** | Trust `X-Forwarded-For` only from configured proxy IPs |
-| P0-4 | **Open** | HTTP tests for `POST /api/admin/unban` |
-| P0-5 | **Open** | Table-driven tests for `verify_ban` taxonomy |
-| P0-6 | **Open** | Test `details_` admin callback end-to-end |
-| P0-7 | **Open** | Test 503 when `ADMIN_API_KEY` unset |
-| P0-8 | **Open** | Test watcher message log / stylometry ingestion |
+| P0-2 | **Verify** | Precheck per-token rate limit — likely done (ai-attack req 2); confirm tests, mark DONE in audit |
+| P0-3 | **Verify** | `TRUSTED_PROXY_IPS` for `X-Forwarded-For` — likely done (ai-attack req 4); confirm tests, mark DONE in audit |
+| P0-4 | Done | HTTP tests for `POST /api/admin/unban` |
+| P0-5 | Done | Table-driven tests for `verify_ban` taxonomy |
+| P0-6 | Done | Test `details_` admin callback end-to-end |
+| P0-7 | Done | Test 503 when `ADMIN_API_KEY` unset |
+| P0-8 | Done | Test watcher message log / stylometry ingestion |
 
 #### P1 — hardening (selected)
 

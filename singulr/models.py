@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import BigInteger, Boolean, DateTime, Float, Integer, String, Text, func
+from sqlalchemy import BigInteger, Boolean, DateTime, Float, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.types import JSON
@@ -38,12 +38,15 @@ class VerificationToken(Base):
 
 
 class Profile(Base):
-    """Verified member profile with device and keystroke data."""
+    """Verified member profile — one row per (telegram_user_id, device_type)."""
 
     __tablename__ = "profiles"
+    __table_args__ = (
+        UniqueConstraint("telegram_user_id", "device_type", name="uq_profiles_user_device"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    telegram_user_id: Mapped[int] = mapped_column(BigInteger, unique=True, index=True)
+    telegram_user_id: Mapped[int] = mapped_column(BigInteger, index=True)
     fingerprint_hash: Mapped[str] = mapped_column(String(66), index=True)
     keystroke_profile: Mapped[dict[str, Any]] = mapped_column(JSON().with_variant(JSONB, "postgresql"))
     device_type: Mapped[str] = mapped_column(String(16))

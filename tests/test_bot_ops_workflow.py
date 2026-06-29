@@ -153,7 +153,7 @@ async def test_auto_deny_block_posts_audit_without_permit(monkeypatch: pytest.Mo
     app.bot.send_message.assert_awaited_once()
     markup = app.bot.send_message.await_args.kwargs.get("reply_markup")
     assert markup is not None
-    assert "More details" in str(markup)
+    assert "View Profile" in str(markup)
     assert "BAN EVASION" in app.bot.send_message.await_args.kwargs["text"]
 
 

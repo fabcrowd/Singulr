@@ -73,6 +73,14 @@ class SubmitBody(BaseModel):
     challenge_proof: str = ""
 
 
+class InternalBanBody(BaseModel):
+    """Request body for the internal ban endpoint."""
+
+    telegram_user_id: int
+    channel_id: int = 0
+    reason: str = "admin_ban"
+
+
 def _client_ip(request: Request) -> str:
     """Extract client IP from proxy headers or socket."""
     settings = get_settings()
@@ -359,7 +367,7 @@ async def submit(
             fingerprint_hash=fingerprint_hash,
         )
         await _notify_bot(payload)
-        return payload
+        return {"decision": "block"}
 
     if result.decision in {Decision.FLAG, Decision.PENDING}:
         payload = _decision_payload(
@@ -370,13 +378,14 @@ async def submit(
             result=result,
         )
         await _notify_bot(payload)
-        return payload
+        return {"decision": decision_name}
 
-    existing_profile = await get_profile(session, token_row.telegram_user_id)
+    existing_profile = await get_profile(
+        session, token_row.telegram_user_id, device_type=body.device_type
+    )
     if existing_profile:
         existing_profile.fingerprint_hash = fingerprint_hash
         existing_profile.keystroke_profile = keystroke_profile
-        existing_profile.device_type = body.device_type
         existing_profile.ip_hash = ip_hash
         if is_reverification_required(existing_profile):
             existing_profile.status = STATUS_APPROVED
@@ -410,20 +419,20 @@ async def submit(
         policy=policy,
     )
     await _notify_bot(payload)
-    return payload
+    return {"decision": "approve"}
 
 
 @router.post("/internal/ban")
 async def admin_ban(
-    payload: dict[str, Any],
+    body: InternalBanBody,
     _: None = Depends(require_admin_key),
     session: AsyncSession = Depends(get_session),
 ) -> dict[str, Any]:
     """Record a ban from admin inline button."""
     fingerprint_hash = await persist_ban(
         session,
-        telegram_user_id=int(payload["telegram_user_id"]),
-        channel_id=int(payload.get("channel_id", 0)),
-        reason=str(payload.get("reason", "admin_ban")),
+        telegram_user_id=body.telegram_user_id,
+        channel_id=body.channel_id,
+        reason=body.reason,
     )
     return {"ok": True, "fingerprint_hash": fingerprint_hash}

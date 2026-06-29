@@ -282,8 +282,9 @@ async def test_submit_visitor_id_mismatch_forces_pending(
     assert response.status_code == 200
     body = response.json()
     assert body["decision"] == "pending"
-    assert "visitor_id_mismatch" in body.get("risk_factors", [])
     mock_notify.assert_awaited_once()
+    notify_payload = mock_notify.await_args.args[0]
+    assert "visitor_id_mismatch" in notify_payload.get("risk_factors", [])
 
 
 def _uniform_keystrokes(count: int = 20, flight: float = 50.0) -> list[dict]:
@@ -341,8 +342,9 @@ async def test_submit_flags_synthetic_keystroke_rhythm(
     assert response.status_code == 200
     body = response.json()
     assert body["decision"] == "flag"
-    assert "synthetic_keystroke" in body.get("risk_factors", [])
     mock_notify.assert_awaited_once()
+    notify_payload = mock_notify.await_args.args[0]
+    assert "synthetic_keystroke" in notify_payload.get("risk_factors", [])
 
 
 @pytest.mark.asyncio
@@ -368,8 +370,9 @@ async def test_submit_flags_too_fast_typing(
     assert response.status_code == 200
     body = response.json()
     assert body["decision"] == "flag"
-    assert "too_fast_verify" in body.get("risk_factors", [])
     mock_notify.assert_awaited_once()
+    notify_payload = mock_notify.await_args.args[0]
+    assert "too_fast_verify" in notify_payload.get("risk_factors", [])
 
 
 @pytest.mark.asyncio
@@ -481,9 +484,10 @@ async def test_submit_approves_clean_user(
     assert response.status_code == 200
     body = response.json()
     assert body["decision"] == "approve"
-    assert body["telegram_user_id"] == 333
-    assert body["channel_id"] == 99
     mock_notify.assert_awaited_once()
+    notify_payload = mock_notify.await_args.args[0]
+    assert notify_payload["telegram_user_id"] == 333
+    assert notify_payload["channel_id"] == 99
 
 
 @pytest.mark.asyncio
@@ -535,8 +539,9 @@ async def test_submit_flags_env_anomaly_when_webdriver(
     assert response.status_code == 200
     body = response.json()
     assert body["decision"] == "flag"
-    assert any("env_anomaly" in factor for factor in body["risk_factors"])
     mock_notify.assert_awaited_once()
+    notify_payload = mock_notify.await_args.args[0]
+    assert any("env_anomaly" in factor for factor in notify_payload["risk_factors"])
 
 
 @pytest.mark.asyncio
@@ -568,7 +573,6 @@ async def test_submit_returns_pending_with_channel_policy(
     assert response.status_code == 200
     body = response.json()
     assert body["decision"] == "pending"
-    assert body["security_preset"] == "balanced"
     mock_check.assert_awaited_once()
     assert mock_check.await_args.kwargs["channel_id"] == 42
     assert mock_check.await_args.kwargs["policy"].security_preset == "balanced"
@@ -639,7 +643,6 @@ async def test_submit_pending_when_chain_unavailable(
     assert response.status_code == 200
     body = response.json()
     assert body["decision"] == "pending"
-    assert "chain_unavailable" in body.get("risk_factors", [])
     mock_notify.assert_awaited_once()
     notify_payload = mock_notify.await_args.args[0]
     assert notify_payload["decision"] == "pending"

@@ -25,7 +25,7 @@ def test_truncate_fingerprint_hash_long_value() -> None:
 
 
 def test_format_elevated_risk_includes_user_factors_and_score() -> None:
-    """Elevated-risk logs include user id, factors, and parsed similarity score."""
+    """Elevated-risk logs include user id, humanized signals, and parsed similarity score."""
     body = format_elevated_risk_body(
         user_id=424242,
         reason="Elevated risk - review recommended",
@@ -33,7 +33,8 @@ def test_format_elevated_risk_includes_user_factors_and_score() -> None:
     )
     assert "User ID: 424242" in body
     assert "Reason: Elevated risk - review recommended" in body
-    assert "Risk factors: ip_hash_match, keystroke_similarity:0.87" in body
+    assert "Signals:" in body
+    assert "Typing rhythm similarity to banned user: 87%" in body
     assert "Risk score: 87%" in body
 
 
@@ -76,7 +77,7 @@ def test_build_log_body_routes_structured_event_types() -> None:
         ban_fingerprint=None,
     )
     assert "User ID: 1" in elevated
-    assert "Risk factors: ip_velocity" in elevated
+    assert "Signals:" in elevated
 
     evasion = _build_log_body(
         "BAN_EVASION",

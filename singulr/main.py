@@ -95,3 +95,32 @@ async def verify_page(token: str = "") -> FileResponse | HTMLResponse:
     if index.exists():
         return FileResponse(index)
     return HTMLResponse("<h1>verify.html missing</h1>", status_code=500)
+
+
+@app.get("/privacy", response_model=None)
+async def privacy_page() -> FileResponse | HTMLResponse:
+    """Serve privacy policy page."""
+    page = STATIC_DIR / "privacy.html"
+    if page.exists():
+        return FileResponse(page)
+    return HTMLResponse(
+        """<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><title>Privacy Policy — Singulr</title>
+<style>body{font-family:sans-serif;max-width:700px;margin:3rem auto;padding:0 1rem;line-height:1.6}h1{font-size:1.4rem}</style>
+</head>
+<body>
+<h1>Privacy Policy</h1>
+<p>Singulr collects the following data during the join verification process:</p>
+<ul>
+  <li><strong>Device fingerprint</strong> — a hash derived from browser characteristics. The raw value is never stored; only the hash is kept.</li>
+  <li><strong>Keystroke timing</strong> — key-down/key-up intervals while you type the verification sentence. Used to detect returning banned users by typing pattern.</li>
+  <li><strong>IP address hash</strong> — a one-way hash of your IP address. The raw IP is never stored.</li>
+  <li><strong>Telegram user ID and display name</strong> — provided by Telegram when you request to join.</li>
+</ul>
+<p>This data is used solely to enforce community safety rules and prevent ban evasion. It is not sold to third parties. Raw messages are never stored; only statistical writing-style summaries are kept for returning-user detection.</p>
+<p>To request deletion of your data, contact the channel administrator.</p>
+</body>
+</html>""",
+        media_type="text/html",
+    )

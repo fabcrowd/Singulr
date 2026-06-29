@@ -121,6 +121,44 @@ def truncate_fingerprint_hash(fingerprint_hash: str) -> str:
     return f"{fingerprint_hash[:FINGERPRINT_DISPLAY_LEN]}..."
 
 
+_RISK_FACTOR_LABELS: dict[str, str] = {
+    "exact_fingerprint_match": "Device fingerprint matches a banned user",
+    "visitor_id_mismatch": "Device ID changed mid-session (possible swap)",
+    "synthetic_keystrokes": "Typing pattern looks automated",
+    "webdriver": "Automated browser detected (WebDriver)",
+    "headless_ua": "Headless browser detected",
+    "outer_dims_zero": "Browser window dimensions are zero",
+    "network_reputation": "Flagged by shared network ban registry",
+    "ip_overlap": "IP address linked to a previously banned user",
+    "watcher_match": "Writing style matches a banned user (Watcher)",
+    "social_pending": "Social profile flagged for review",
+    "env_anomaly": "Suspicious browser environment",
+}
+
+
+def _humanize_risk_factor(factor: str) -> str | None:
+    """Translate internal risk-factor code to admin-readable English.
+
+    Returns None for factors rendered separately by _join_burst_context.
+    """
+    if factor in _RISK_FACTOR_LABELS:
+        return _RISK_FACTOR_LABELS[factor]
+    if factor.startswith("join_burst:"):
+        return None
+    for prefix, label in (
+        ("keystroke_similarity:", "Typing rhythm similarity to banned user"),
+        ("stylometry_similarity:", "Writing style similarity to banned user"),
+        ("automation_score:", "Bot/automation probability"),
+    ):
+        if factor.startswith(prefix):
+            raw = factor.split(":", 1)[1]
+            try:
+                return f"{label}: {float(raw):.0%}"
+            except ValueError:
+                pass
+    return factor.replace("_", " ").capitalize()
+
+
 def _join_burst_context(risk_factors: list[str]) -> str | None:
     """Human-readable join burst line when burst risk is present."""
     for factor in risk_factors:
@@ -166,11 +204,13 @@ def format_elevated_risk_body(
         f"User ID: {user_id}",
         f"Reason: {reason}",
     ]
-    if factors:
-        lines.append(f"Risk factors: {', '.join(factors)}")
+    humanized = [h for f in factors if (h := _humanize_risk_factor(f)) is not None]
+    if humanized:
+        lines.append("Signals:")
+        lines.extend(f"  • {h}" for h in humanized)
     burst_context = _join_burst_context(factors)
     if burst_context:
-        lines.append(burst_context)
+        lines.append(f"  • {burst_context}")
     risk_score = _risk_score_from_factors(factors)
     if risk_score is not None:
         lines.append(f"Risk score: {risk_score:.0%}")
@@ -321,9 +361,10 @@ async def log_to_ops_channel(
     if not ops_chat:
         return
     prefix = {
-        "PENDING_REVIEW": "PENDING REVIEW",
-        "BAN_EVASION": "BAN EVASION",
-        "BLOCKED": "BLOCKED",
+        "PENDING_REVIEW": "⏳ PENDING REVIEW — action required",
+        "BAN_EVASION": "🚫 BAN EVASION DETECTED",
+        "BLOCKED": "🛑 BLOCKED",
+        "ELEVATED_RISK": "⚠️ ELEVATED RISK",
     }.get(event_type, event_type)
     message_body = _build_log_body(
         event_type,
@@ -343,13 +384,13 @@ async def log_to_ops_channel(
     if user_id and event_type == "PENDING_REVIEW":
         rows.append(
             [
-                InlineKeyboardButton("Permit", callback_data=f"permit_{channel_id}_{user_id}"),
-                InlineKeyboardButton("Deny", callback_data=f"deny_{channel_id}_{user_id}"),
+                InlineKeyboardButton("Approve", callback_data=f"permit_{channel_id}_{user_id}"),
+                InlineKeyboardButton("Deny & Ban", callback_data=f"deny_{channel_id}_{user_id}"),
             ]
         )
     if user_id and include_details_button:
         rows.append(
-            [InlineKeyboardButton("More details", callback_data=f"details_{channel_id}_{user_id}")]
+            [InlineKeyboardButton("View Profile", callback_data=f"details_{channel_id}_{user_id}")]
         )
     if rows:
         keyboard = InlineKeyboardMarkup(rows)
@@ -380,11 +421,11 @@ async def log_to_channel(
     if not settings.log_channel_id:
         return
     prefix = {
-        "ELEVATED_RISK": "ELEVATED RISK",
-        "BAN_EVASION": "BAN EVASION",
-        "WATCHER_MATCH": "WATCHER MATCH",
-        "APPROVED": "VERIFIED",
-        "BLOCKED": "BLOCKED",
+        "ELEVATED_RISK": "⚠️ ELEVATED RISK",
+        "BAN_EVASION": "🚫 BAN EVASION",
+        "WATCHER_MATCH": "👁 WATCHER MATCH — possible re-entry",
+        "APPROVED": "✅ VERIFIED",
+        "BLOCKED": "🛑 BLOCKED",
     }.get(event_type, event_type)
     message_body = _build_log_body(
         event_type,
@@ -429,7 +470,7 @@ async def format_admin_profile_details(
     social_sources: list[str] | None = None,
 ) -> str:
     """Build expanded admin-only profile message."""
-    lines = [f"User ID: {user_id}", f"Channel ID: {channel_id}"]
+    lines = [f"User ID: {user_id}"]
     try:
         member = await app.bot.get_chat_member(channel_id, user_id)
         user = member.user

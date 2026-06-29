@@ -25,13 +25,13 @@
 | ID | Risk | Location | Action |
 |----|------|----------|--------|
 | P0-1 | **High** | `security_wizard.py` callbacks | Re-check `is_channel_admin()` on **every** wizard step, especially `confirm_selected` before `upsert_channel_security_settings` | **DONE** (2026-06-26 tick 21) |
-| P0-2 | **High** | `api/verify.py` precheck | Per-token rate limit; reduce oracle (`allowed`/`ip_flagged` brute-force on leaked links) |
-| P0-3 | **High** | `api/verify.py` `_client_ip` | Only trust `X-Forwarded-For` from configured proxy IPs |
-| P0-4 | **Critical** | `POST /api/admin/unban` | HTTP tests: 200, 400, 404, 401; wire if missing coverage |
-| P0-5 | **Critical** | `services/verify_ban.py` | Table-driven tests for `block_ban_taxonomy` (social_hard, evasion, scam, default) |
-| P0-6 | **Critical** | `handlers.py` `details_` + `format_admin_profile_details` | Test "More details" callback end-to-end |
-| P0-7 | **Critical** | `api/security.py` `require_admin_key` | Test 503 when `ADMIN_API_KEY` unset |
-| P0-8 | **Critical** | `handlers.py` `on_channel_message` | Test stylometry / message log ingestion (watcher data path) |
+| P0-2 | **High** | `api/verify.py` precheck | Per-token rate limit; reduce oracle (`allowed`/`ip_flagged` brute-force on leaked links) | **DONE** — `allow_precheck_for_token`, `tests/test_verify_rate_limit.py` |
+| P0-3 | **High** | `api/verify.py` `_client_ip` | Only trust `X-Forwarded-For` from configured proxy IPs | **DONE** — `TRUSTED_PROXY_IPS` in config, `tests/test_api_verify.py` |
+| P0-4 | **Critical** | `POST /api/admin/unban` | HTTP tests: 200, 400, 404, 401 | **DONE** — `tests/test_admin_api.py` |
+| P0-5 | **Critical** | `services/verify_ban.py` | Table-driven tests for `block_ban_taxonomy` | **DONE** — `tests/test_verify_ban.py` |
+| P0-6 | **Critical** | `handlers.py` `details_` + `format_admin_profile_details` | Test "More details" callback end-to-end | **DONE** — `tests/test_bot_ops_workflow.py` |
+| P0-7 | **Critical** | `api/security.py` `require_admin_key` | Test 503 when `ADMIN_API_KEY` unset | **DONE** — `tests/test_admin_api.py` |
+| P0-8 | **Critical** | `handlers.py` `on_channel_message` | Test stylometry / message log ingestion | **DONE** — `tests/test_bot_handlers.py` + `tests/test_watcher.py` |
 
 ---
 
@@ -44,7 +44,7 @@
 | P1-3 | **High** | `GET /api/admin/appeals` | List + auth tests |
 | P1-4 | **High** | `domain/chain_mapping.py` | Parametrize ordinals vs `BanRegistry.sol` enums |
 | P1-5 | **Critical** | `contracts/BanRegistry.sol` | Add Hardhat tests; add `npx hardhat test` to CI / verify gate |
-| P1-6 | **Medium** | `api/verify.py` `admin_ban` | Pydantic body; validate category/severity; 422 on bad input |
+| P1-6 | **Medium** | `api/verify.py` `admin_ban` | Pydantic body; validate category/severity; 422 on bad input | **DONE** — `InternalBanBody` model added 2026-06-28 |
 | P1-7 | **Medium** | `api/verify.py` submit response | Strip internal fields from client JSON (risk_factors, matched_ban_id) |
 | P1-8 | **Medium** | `services/blockchain.py` | Fail-closed on RPC error → PENDING + ops alert; test init failure path | **DONE** (2026-06-26) |
 | P1-9 | **Medium** | `services/rate_limit.py` | Redis/shared limiter for multi-worker deploy; admin route limits |

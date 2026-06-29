@@ -239,7 +239,9 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         await grant_access(context.application, settings.channel_id, user_id)
         await notify_user_result(context.application, user_id, approved=True)
         if query.message:
-            await query.message.reply_text(f"Approved user {user_id}")
+            await query.message.reply_text(
+                f"User {user_id} approved — they can now message the channel."
+            )
     elif data.startswith("permit_"):
         channel_id, user_id = _parse_channel_user_callback(data.removeprefix("permit_"))
         if not await _require_ops_admin(query, channel_id):
@@ -249,7 +251,9 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         await grant_access(context.application, channel_id, user_id)
         await notify_user_result(context.application, user_id, approved=True)
         if query.message:
-            await query.message.reply_text(f"Permitted user {user_id}")
+            await query.message.reply_text(
+                f"User {user_id} approved — they can now message the channel."
+            )
     elif data.startswith("deny_"):
         channel_id, user_id = _parse_channel_user_callback(data.removeprefix("deny_"))
         if not await _require_ops_admin(query, channel_id):
@@ -263,7 +267,9 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             "Admin review denied your verification.",
         )
         if query.message:
-            await query.message.reply_text(f"Denied user {user_id}")
+            await query.message.reply_text(
+                f"User {user_id} denied and banned from the channel."
+            )
     elif data.startswith("details_"):
         channel_id, user_id = _parse_channel_user_callback(data.removeprefix("details_"))
         if not await _require_ops_admin(query, channel_id):
@@ -357,8 +363,10 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             )
         await notify_user_result(context.application, user_id, approved=False)
         if query.message:
+            cat_label = category.value.replace("_", " ").title()
             await query.message.reply_text(
-                f"Banned user {user_id} ({category.value}/{severity.value})."
+                f"User {user_id} permanently banned.\n"
+                f"Violation: {cat_label} ({severity.value})."
             )
     elif data.startswith("ban_cat_"):
         if not await _require_ops_admin(query, settings.channel_id):
